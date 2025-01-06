@@ -109,13 +109,7 @@ func (r *Schema) FieldsJson() map[string]interface{} {
 				}
 
 				if subField.ValueType == "object" && subField.SubFields != nil {
-					objectFieldProperties := make(map[string]interface{})
-					for _, objField := range subField.SubFields {
-						objectFieldProperties[objField.ValueName] = map[string]string{
-							"type":        objField.ValueType,
-							"description": objField.ValueDescription,
-						}
-					}
+					objectFieldProperties := processObjectFields(subField.SubFields)
 					arrayFieldProperties[subField.ValueName] = map[string]interface{}{
 						"type":        subField.ValueType,
 						"description": subField.ValueDescription,
@@ -145,13 +139,7 @@ func (r *Schema) FieldsJson() map[string]interface{} {
 		}
 
 		if field.ValueType == "object" {
-			objectFieldProperties := make(map[string]interface{})
-			for _, subField := range field.SubFields {
-				objectFieldProperties[subField.ValueName] = map[string]string{
-					"type":        subField.ValueType,
-					"description": subField.ValueDescription,
-				}
-			}
+			objectFieldProperties := processObjectFields(field.SubFields)
 			properties[field.ValueName] = map[string]interface{}{
 				"type":        field.ValueType,
 				"description": field.ValueDescription,
@@ -516,4 +504,37 @@ func (f *Field) getRequiredFields() []string {
 		}
 	}
 	return required
+}
+
+func processObjectFields(fields []*Field) map[string]interface{} {
+	objectFieldProperties := make(map[string]interface{})
+	for _, field := range fields {
+		// Handle AnyOf fields
+		if field.ValueAnyOf != nil {
+			anyOf := make([]map[string]interface{}, 0, len(field.ValueAnyOf))
+			for _, enum := range field.ValueAnyOf {
+				anyOf = append(anyOf, map[string]interface{}{
+					"const":       enum.Const,
+					"description": enum.Description,
+				})
+			}
+
+			fieldProps := map[string]interface{}{
+				"anyOf": anyOf,
+			}
+			if field.ValueDescription != "" {
+				fieldProps["description"] = field.ValueDescription
+			}
+
+			objectFieldProperties[field.ValueName] = fieldProps
+			continue
+		}
+
+		// Handle regular fields
+		objectFieldProperties[field.ValueName] = map[string]string{
+			"type":        field.ValueType,
+			"description": field.ValueDescription,
+		}
+	}
+	return objectFieldProperties
 }

@@ -1,17 +1,16 @@
 # jobj
 
-`jobj` is a Go package that provides a flexible and type-safe way to create and manage JSON and XML schema definitions. It offers a fluent API for defining complex data structures with field validation, custom types, and schema generation capabilities.
+`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining json data structures for the purpose of generating json schemas in context of requesting specific options from large language models.
+
+Does not attempt to implement the entire spec, only a subset for creating dynamic json schemas. 
 
 ## Features
 
-- Fluent API for schema definition
-- Support for both JSON and XML schema generation
-- Custom date type handling with `JsonDate`
-- Field validation and type checking
+- API for schema definition
+- JSON to Go date type handling with `JsonDate`
 - Support for nested objects and arrays
 - Enum-like field constraints using `AnyOf`
 - Required/optional field specification
-- Schema validation against Go structs
 
 ## Installation
 
@@ -74,16 +73,6 @@ jobj.Text("field").
     SetValue("default")        // Set default value
 ```
 
-### Working with JsonDate
-
-The package includes a custom `JsonDate` type for handling dates in YYYY-MM-DD format:
-
-```go
-type Document struct {
-    PublishDate JsonDate `json:"publish_date"`
-}
-```
-
 ### Schema Generation
 
 Generate JSON schema:
@@ -93,26 +82,14 @@ response := NewHeadlineResponse()
 schemaJSON := response.GetSchemaString()
 ```
 
-Generate XML schema:
+### Working with JsonDate
+
+The package includes a custom `JsonDate` type for handling dates in YYYY-MM-DD format:
 
 ```go
-response := NewHeadlineResponse()
-response.UseXML = true
-schemaXML := response.GetSchemaString()
-```
-
-### Schema Validation
-
-Validate that your schema matches a struct:
-
-```go
-type MyStruct struct {
-    Headline    string  `json:"headline"`
-    Confidence  float64 `json:"confidence"`
+type Document struct {
+    PublishDate JsonDate `json:"publish_date"`
 }
-
-response := NewHeadlineResponse()
-isValid := response.Validate(&MyStruct{})
 ```
 
 ## Contributing

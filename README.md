@@ -1,6 +1,6 @@
 # jobj
 
-`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining json data structures for the purpose of generating json schemas in context of requesting specific options from large language models.
+`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining json data structures for the purpose of generating json schemas in context of requesting specific options from large language models. Works in a very limited capacity with XML schemas.
 
 Does not attempt to implement the entire spec, only a subset for creating dynamic json schemas. 
 
@@ -12,15 +12,11 @@ Does not attempt to implement the entire spec, only a subset for creating dynami
 - Enum-like field constraints using `AnyOf`
 - Required/optional field specification
 
-## Installation
+## Usage And Examples
 
 ```bash
 go get github.com/mhpenta/jobj
 ```
-
-## Usage
-
-### Basic Example
 
 ```go
 package main
@@ -126,7 +122,3 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-## Note
-
-This package is designed for creating schema definitions that can be used with JSON and XML data structures. It's particularly useful for defining API responses and data validation requirements.

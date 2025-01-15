@@ -79,14 +79,12 @@ func (r *Schema) FieldsJson() map[string]interface{} {
 			arrayFieldProperties := make(map[string]interface{})
 			requiredFields := []string{}
 
-			// Collect required fields once
 			for _, subField := range field.SubFields {
 				if subField.ValueRequired {
 					requiredFields = append(requiredFields, subField.ValueName)
 				}
 			}
 
-			// Process all fields
 			for _, subField := range field.SubFields {
 				if subField.ValueAnyOf != nil {
 					anyOf := make([]map[string]interface{}, 0, len(subField.ValueAnyOf))
@@ -156,128 +154,6 @@ func (r *Schema) FieldsJson() map[string]interface{} {
 	}
 	return properties
 }
-
-//func (r *Schema) FieldsJson() map[string]interface{} {
-//	properties := make(map[string]interface{})
-//	for _, field := range r.Fields {
-//
-//		if field.ValueAnyOf != nil {
-//			anyOf := make([]map[string]interface{}, 0, len(field.ValueAnyOf))
-//			for _, enum := range field.ValueAnyOf {
-//				anyOf = append(anyOf, map[string]interface{}{
-//					"const":       enum.Const,
-//					"description": enum.Description,
-//				})
-//			}
-//
-//			fieldProps := map[string]interface{}{
-//				"anyOf": anyOf,
-//			}
-//
-//			if field.ValueDescription != "" {
-//				fieldProps["description"] = field.ValueDescription
-//			}
-//
-//			properties[field.ValueName] = fieldProps
-//			continue
-//		}
-//
-//		if field.ValueType == "array" {
-//			if field.SubFields != nil {
-//				arrayFieldProperties := make(map[string]interface{})
-//				requiredFields := []string{}
-//
-//				// First collect all required fields, regardless of type
-//				for _, subField := range field.SubFields {
-//					if subField.ValueRequired {
-//						requiredFields = append(requiredFields, subField.ValueName)
-//					}
-//				}
-//
-//				// Then process the fields
-//				for _, subField := range field.SubFields {
-//					if subField.ValueAnyOf != nil {
-//						anyOf := make([]map[string]interface{}, 0, len(subField.ValueAnyOf))
-//						for _, enum := range subField.ValueAnyOf {
-//							anyOf = append(anyOf, map[string]interface{}{
-//								"const":       enum.Const,
-//								"description": enum.Description,
-//							})
-//						}
-//
-//						fieldProps := map[string]interface{}{
-//							"anyOf": anyOf,
-//						}
-//						if subField.ValueDescription != "" {
-//							fieldProps["description"] = subField.ValueDescription
-//						}
-//
-//						arrayFieldProperties[subField.ValueName] = fieldProps
-//						continue
-//					}
-//
-//					// Handle nested objects within array items
-//					if subField.ValueType == "object" && subField.SubFields != nil {
-//						objectFieldProperties := make(map[string]interface{})
-//						for _, objField := range subField.SubFields {
-//							objectFieldProperties[objField.ValueName] = map[string]string{
-//								"type":        objField.ValueType,
-//								"description": objField.ValueDescription,
-//							}
-//						}
-//						arrayFieldProperties[subField.ValueName] = map[string]interface{}{
-//							"type":        subField.ValueType,
-//							"description": subField.ValueDescription,
-//							"properties":  objectFieldProperties,
-//							"required":    subField.getRequiredFields(),
-//						}
-//						continue
-//					}
-//
-//					arrayFieldProperties[subField.ValueName] = map[string]string{
-//						"type":        subField.ValueType,
-//						"description": subField.ValueDescription,
-//					}
-//				}
-//
-//				properties[field.ValueName] = map[string]interface{}{
-//					"type":                 field.ValueType,
-//					"description":          field.ValueDescription,
-//					"additionalProperties": field.AdditionalProperties,
-//					"items": map[string]interface{}{
-//						"type":       "object",
-//						"properties": arrayFieldProperties,
-//						"required":   requiredFields,
-//					},
-//				}
-//				continue
-//			}
-//		}
-//
-//		if field.ValueType == "object" {
-//			objectFieldProperties := make(map[string]interface{})
-//			for _, subField := range field.SubFields {
-//				objectFieldProperties[subField.ValueName] = map[string]string{
-//					"type":        subField.ValueType,
-//					"description": subField.ValueDescription,
-//				}
-//			}
-//			properties[field.ValueName] = map[string]interface{}{
-//				"type":        field.ValueType,
-//				"description": field.ValueDescription,
-//				"properties":  objectFieldProperties,
-//				"required":    field.getRequiredFields(),
-//			}
-//			continue
-//		}
-//
-//		properties[field.ValueName] = map[string]string{
-//			"type":        field.ValueType,
-//			"description": field.ValueDescription,
-//		}
-//	}
-//	return properties
-//}
 
 func (r *Schema) RequiredFields() []string {
 	var required []string
@@ -371,85 +247,6 @@ func (r *Schema) GetXMLSchemaString() string {
 		return ""
 	}
 
-	// Add XML header and correct namespaces
-	header := xml.Header
-	return header + string(output)
-}
-
-func (r *Schema) GetXMLSchemaString2() string {
-	type xsDocumentation struct {
-		XMLName xml.Name `xml:"xs:documentation"`
-		Content string   `xml:",chardata"`
-	}
-
-	type xsAnnotation struct {
-		XMLName       xml.Name        `xml:"xs:annotation"`
-		Documentation xsDocumentation `xml:"xs:documentation"`
-	}
-
-	type xsElement struct {
-		XMLName    xml.Name
-		Name       string       `xml:"name,attr"`
-		Type       string       `xml:"type,attr,omitempty"`
-		MinOccur   string       `xml:"minOccurs,attr,omitempty"`
-		MaxOccur   string       `xml:"maxOccurs,attr,omitempty"`
-		Annotation xsAnnotation `xml:"annotation,omitempty"`
-	}
-
-	type xsComplexType struct {
-		XMLName  xml.Name
-		Name     string      `xml:"name,attr"`
-		Sequence []xsElement `xml:"sequence>element"`
-	}
-
-	type xsSchema struct {
-		XMLName     xml.Name      `xml:"xs:schema"`
-		Xmlns       string        `xml:"xmlns:xs,attr"`
-		Element     xsElement     `xml:"element"`
-		ComplexType xsComplexType `xml:"complexType"`
-	}
-
-	elements := make([]xsElement, 0, len(r.Fields))
-	for _, field := range r.Fields {
-		xsType := mapGoTypeToXSType(field.ValueType)
-		elem := xsElement{
-			Name: field.ValueName,
-			Type: xsType,
-			Annotation: xsAnnotation{
-				Documentation: xsDocumentation{
-					Content: field.ValueDescription,
-				},
-			},
-		}
-		if field.ValueRequired {
-			elem.MinOccur = "1"
-			elem.MaxOccur = "1"
-		} else {
-			elem.MinOccur = "0"
-			elem.MaxOccur = "1"
-		}
-		elements = append(elements, elem)
-	}
-
-	schema := xsSchema{
-		Xmlns: "http://www.w3.org/2001/XMLSchema",
-		Element: xsElement{
-			Name: r.Name,
-			Type: r.Name + "Type",
-		},
-		ComplexType: xsComplexType{
-			Name:     r.Name + "Type",
-			Sequence: elements,
-		},
-	}
-
-	output, err := xml.MarshalIndent(schema, "", "  ")
-	if err != nil {
-		log.Println("Error marshalling XML Schema:", err)
-		return ""
-	}
-
-	// Add XML header and correct namespaces
 	header := xml.Header
 	return header + string(output)
 }
@@ -461,9 +258,9 @@ func mapGoTypeToXSType(goType string) string {
 	case "boolean":
 		return "xs:boolean"
 	case "number":
-		return "xs:float" // or xs:decimal, xs:int based on what is more appropriate
+		return "xs:float"
 	default:
-		return "xs:string" // default or unknown types
+		return "xs:string"
 	}
 }
 
@@ -509,7 +306,6 @@ func (f *Field) getRequiredFields() []string {
 func processObjectFields(fields []*Field) map[string]interface{} {
 	objectFieldProperties := make(map[string]interface{})
 	for _, field := range fields {
-		// Handle AnyOf fields
 		if field.ValueAnyOf != nil {
 			anyOf := make([]map[string]interface{}, 0, len(field.ValueAnyOf))
 			for _, enum := range field.ValueAnyOf {
@@ -530,7 +326,6 @@ func processObjectFields(fields []*Field) map[string]interface{} {
 			continue
 		}
 
-		// Handle regular fields
 		objectFieldProperties[field.ValueName] = map[string]string{
 			"type":        field.ValueType,
 			"description": field.ValueDescription,

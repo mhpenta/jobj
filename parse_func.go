@@ -16,16 +16,27 @@ import (
 func ParseFuncSchema(function interface{}) (Schema, error) {
 
 	if function == nil {
-		return Schema{}, fmt.Errorf("function cannot be nil")
+		return Schema{}, fmt.Errorf("received nil function; must provide a valid function")
 	}
 
 	funcType := reflect.TypeOf(function)
 	if funcType.Kind() != reflect.Func {
-		return Schema{}, fmt.Errorf("input must be a function")
+		return Schema{}, fmt.Errorf("received %v, expected a function type", funcType.Kind())
 	}
 
 	if funcType.NumIn() != 2 || funcType.NumOut() != 2 {
-		return Schema{}, fmt.Errorf("function must have signature func(context.Context, any) (string, error)")
+		return Schema{}, fmt.Errorf(
+			"invalid function signature: got %d inputs and %d outputs, expected signature: func(context.Context, any) (string, error)",
+			funcType.NumIn(),
+			funcType.NumOut(),
+		)
+	}
+
+	if funcType.In(0).String() != "context.Context" {
+		return Schema{}, fmt.Errorf(
+			"first parameter must be context.Context, got %s",
+			funcType.In(0).String(),
+		)
 	}
 
 	paramType := funcType.In(1)
@@ -35,7 +46,10 @@ func ParseFuncSchema(function interface{}) (Schema, error) {
 	}
 
 	if paramType.Kind() != reflect.Struct {
-		return Schema{}, fmt.Errorf("function's second parameter must be a struct, got %v", paramType.Kind())
+		return Schema{}, fmt.Errorf(
+			"second parameter must be a struct or pointer to struct, got %v. Consider wrapping your parameter in a struct",
+			paramType,
+		)
 	}
 
 	schema := Schema{
@@ -56,6 +70,13 @@ func ParseFuncSchema(function interface{}) (Schema, error) {
 		if jobjField != nil {
 			schema.Fields = append(schema.Fields, jobjField)
 		}
+	}
+
+	if len(schema.Fields) == 0 {
+		return Schema{}, fmt.Errorf(
+			"no valid fields found in struct %s. Ensure fields are exported and of supported types",
+			paramType.Name(),
+		)
 	}
 
 	return schema, nil

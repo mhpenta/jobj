@@ -54,8 +54,10 @@ func (r *Schema) GetSchemaString() string {
 	schemaJson, err := json.MarshalIndent(schema, "", "  ")
 	if err != nil {
 		// In theory, this could be problematic - in practice, however, there are very few ways we could experience
-		// and error, such as: (1) the system ran out of memory, (2) a field values contained invalid UTF-8 characters
-		// or (3) a type was added that implements a custom MarshalJSON method that returns an error
+		// an error: (1) the system ran out of memory, (2) a field values contained invalid UTF-8 characters
+		// or (3) a type was added that implements a custom MarshalJSON method that returns an error.
+		//
+		// Since these are unlikely, we return an empty string and log the error.
 		log.Println("Error marshalling JSON schema:", err)
 		return ""
 	}

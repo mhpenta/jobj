@@ -5,13 +5,13 @@ import (
 )
 
 func TestJsonDateEquality(t *testing.T) {
-	date1 := JsonDate{}
+	date1 := JsonDateTime{}
 	err := date1.UnmarshalJSON([]byte(`"2023-01-01"`))
 	if err != nil {
 		t.Fatalf("Failed to unmarshal date1: %v", err)
 	}
 
-	date2 := JsonDate{}
+	date2 := JsonDateTime{}
 	err = date2.UnmarshalJSON([]byte(`"2023-01-01"`))
 	if err != nil {
 		t.Fatalf("Failed to unmarshal date2: %v", err)

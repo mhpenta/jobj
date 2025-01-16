@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-// JsonDate is a custom date type that can be unmarshalled from JSON for YYYY-MM-DD format.
+// JsonDateTime is a custom date type that can be unmarshalled from JSON for YYYY-MM-DD format.
 // It embeds the time.Time type and provides custom unmarshaling behavior.
-type JsonDate struct {
+type JsonDateTime struct {
 	time.Time
 }
 
-// UnmarshalJSON is the custom unmarshaling method for JsonDate.
+// UnmarshalJSON is the custom unmarshaling method for JsonDateTime.
 // It expects the JSON date string to be in the format "YYYY-MM-DD".
 // It parses the date string and assigns the parsed time to the embedded Time field.
 //
@@ -22,7 +22,7 @@ type JsonDate struct {
 // Returns:
 //   - error: An error if the JSON data is invalid or the date string is not in the expected format.
 //     Returns nil if the unmarshaling is successful.
-func (d *JsonDate) UnmarshalJSON(data []byte) error {
+func (d *JsonDateTime) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
 		return fmt.Errorf("failed to unmarshal JSON data: %v", err)
@@ -44,19 +44,18 @@ const RFC3339Basic = "2006-01-02T15:04:05Z"
 // used to parse feeds.
 func parsePublishedTime(published string) (time.Time, error) {
 	formats := []string{
-		RFC3339Basic,
-		"2006-01-02T15:04:05-07:00", // ISO 8601 format with timezone
-		"2006-01-02 15:04:05",       // Default format without timezone
-		time.DateOnly,
+		"2006-01-02T15:04:05-07:00",
 		time.RFC3339,
-		time.RubyDate,
-		time.RFC822,
+		RFC3339Basic,
+		time.RFC3339Nano,
+		"2006-01-02 15:04:05",
+		time.DateOnly,
 		time.RFC1123Z,
 		time.RFC1123,
 		time.RFC822Z,
+		time.RFC822,
+		time.RubyDate,
 		time.RFC850,
-		time.RFC3339,
-		time.RFC3339Nano,
 		time.Layout,
 		time.ANSIC,
 		time.Stamp,

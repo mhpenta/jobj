@@ -2,7 +2,7 @@ package jobj
 
 import (
 	"encoding/xml"
-	"log"
+	"log/slog"
 )
 
 func (r *Schema) GetXMLSchemaString() string {
@@ -74,7 +74,7 @@ func (r *Schema) GetXMLSchemaString() string {
 
 	output, err := xml.MarshalIndent(schema, "", "  ")
 	if err != nil {
-		log.Println("Error marshalling XML Schema:", err)
+		slog.Error("Error marshalling XML Schema", "err", err)
 		return ""
 	}
 

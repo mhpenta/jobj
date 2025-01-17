@@ -2,7 +2,7 @@ package jobj
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"reflect"
 	"strings"
 )
@@ -58,7 +58,7 @@ func (r *Schema) GetSchemaString() string {
 		// or (3) a type was added that implements a custom MarshalJSON method that returns an error.
 		//
 		// Since these are unlikely, we return an empty string and log the error.
-		log.Println("Error marshalling JSON schema:", err)
+		slog.Error("Error marshalling JSON schema", "err", err)
 		return ""
 	}
 	return string(schemaJson)

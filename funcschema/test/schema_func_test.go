@@ -4,25 +4,16 @@ import (
 	"context"
 	"fmt"
 	"github.com/mhpenta/jobj/funcschema"
-	"log/slog"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 type SearchTool struct{}
 
 type SearchToolParams struct {
-	ID    int
-	Query string
-}
-
-func (f *SearchTool) Parameters() map[string]interface{} {
-	schema, err := funcschema.NewSchemaFromFunc(f.SearchForData)
-	if err != nil {
-		slog.Error("Failed to parse function schema", "error", err)
-		return nil
-	}
-
-	return funcschema.GetPropertiesMap(schema) // Or whatever subset might be useful
+	ID         int     `desc:"ID of item to search" required:"true" `
+	Query      string  `desc:"Query to search for, e.g., xyz" required:"true"`
+	Confidence float64 `desc:"Confidence in the search, between 0 and 1"`
 }
 
 func (f *SearchTool) SearchForData(ctx context.Context, params *SearchToolParams) (string, error) {
@@ -31,7 +22,44 @@ func (f *SearchTool) SearchForData(ctx context.Context, params *SearchToolParams
 
 func TestSearchTool_Parameters(t *testing.T) {
 	searchTool := &SearchTool{}
-	paramsMap := searchTool.Parameters()
+
+	schema, err := funcschema.NewSchemaFromFunc(searchTool.SearchForData)
+	if err != nil {
+		t.Error(err)
+	}
+
+	correct := `{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "SearchToolParams": {
+      "additionalProperties": false,
+      "properties": {
+        "Confidence": {
+          "description": "Confidence in the search, between 0 and 1",
+          "type": "number"
+        },
+        "ID": {
+          "description": "ID of item to search",
+          "type": "integer"
+        },
+        "Query": {
+          "description": "Query to search for, e.g., xyz",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ID",
+        "Query"
+      ],
+      "type": "object"
+    }
+  },
+  "$ref": "#/definitions/SearchToolParams"
+}`
+
+	assert.Equal(t, correct, schema.GetSchemaString())
+
+	paramsMap := funcschema.GetPropertiesMap(schema)
 
 	if paramsMap["properties"].(map[string]interface{})["ID"].(map[string]string)["type"] != "integer" {
 		t.Error("ID field should be integer type")

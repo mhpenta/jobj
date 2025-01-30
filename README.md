@@ -1,6 +1,6 @@
 # jobj
 
-`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining json data structures for the purpose of generating json schemas in context of requesting specific options from large language models. Works in a very limited capacity with XML schemas.
+`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining json data structures for the purpose of generating json schemas in context of requesting specific json objects from large language models. Works in a very limited capacity with XML schemas.
 
 Does not attempt to implement the entire spec, only a subset for creating dynamic json schemas. 
 

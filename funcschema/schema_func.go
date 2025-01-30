@@ -8,7 +8,7 @@ import (
 )
 
 // NewSchemaFromFunc creates a Schema from a function's second parameter type.
-// Returns an error if the function doesn't match signature func(context.Context, any) (string, error)
+// Returns an error if the function doesn't match signature func(context.Context, any)
 // or if the second parameter is not a struct type.
 func NewSchemaFromFunc(function interface{}) (jobj.Schema, error) {
 	if function == nil {
@@ -18,14 +18,6 @@ func NewSchemaFromFunc(function interface{}) (jobj.Schema, error) {
 	funcType := reflect.TypeOf(function)
 	if funcType.Kind() != reflect.Func {
 		return jobj.Schema{}, fmt.Errorf("received %v, expected a function type", funcType.Kind())
-	}
-
-	if funcType.NumIn() != 2 || funcType.NumOut() != 2 {
-		return jobj.Schema{}, fmt.Errorf(
-			"invalid function signature: got %d inputs and %d outputs, expected signature: func(context.Context, any) (string, error)",
-			funcType.NumIn(),
-			funcType.NumOut(),
-		)
 	}
 
 	if funcType.In(0).String() != "context.Context" {

@@ -21,6 +21,8 @@ import (
 //
 // This function is a convenient alternative to calling NewSchemaFromFuncV2 and
 // GetPropertiesMap separately while maintaining compile-time type checking.
+//
+// Internally, we use this to transform Go functions into "Tools" for LLM Agents.
 func SafeSchemaFromFunc[T any, R any](function func(context.Context, T) (R, error)) (map[string]interface{}, error) {
 	schema, err := NewSchemaFromFuncV2(function)
 	if err != nil {

@@ -8,6 +8,21 @@ import (
 	"reflect"
 )
 
+// NewSchemaFromFuncV2 creates a jobj.Schema from a function's second parameter type.
+// Unlike NewSchemaFromFunc, this version uses generics to enforce the function signature
+// at compile time.
+//
+// Type parameters:
+//   - T: The type of the second parameter (must be a struct type)
+//   - R: The return type of the function (can be any type)
+//
+// The function accepts handlers with the signature:
+//
+//	func(context.Context, T) (R, error)
+//
+// Returns a Schema describing the structure of type T and any error encountered.
+// An error is returned if T is not a struct type or if T has no exported fields
+// of supported types.
 func NewSchemaFromFuncV2[T any, R any](function func(context.Context, T) (R, error)) (jobj.Schema, error) {
 	var zero T
 	paramType := reflect.TypeOf(zero)

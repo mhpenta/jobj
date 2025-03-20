@@ -8,9 +8,6 @@ import (
 	"reflect"
 )
 
-// NewSchemaFromFuncV2 creates a Schema from a function's second parameter type.
-// Returns an error if the function doesn't match signature func(context.Context, T) (R, error)
-// or if the second parameter is not a struct type.
 func NewSchemaFromFuncV2[T any, R any](function func(context.Context, T) (R, error)) (jobj.Schema, error) {
 	var zero T
 	paramType := reflect.TypeOf(zero)

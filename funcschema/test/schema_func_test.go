@@ -81,7 +81,7 @@ func TestSearchTool_Parameters(t *testing.T) {
 func TestSearchTool_ParametersV2(t *testing.T) {
 	searchTool := &SearchTool{}
 
-	schema, err := funcschema.NewSchemaFromFuncV2[SearchToolParams, string](searchTool.SearchForData)
+	schema, err := funcschema.NewSchemaFromFuncV2(searchTool.SearchForData)
 	if err != nil {
 		t.Error(err)
 	}

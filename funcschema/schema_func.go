@@ -1,11 +1,57 @@
 package funcschema
 
 import (
+	"context"
 	"fmt"
 	"github.com/mhpenta/jobj"
 	"log/slog"
 	"reflect"
 )
+
+// NewSchemaFromFuncV2 creates a Schema from a function's second parameter type.
+// Returns an error if the function doesn't match signature func(context.Context, T) (R, error)
+// or if the second parameter is not a struct type.
+func NewSchemaFromFuncV2[T any, R any](function func(context.Context, T) (R, error)) (jobj.Schema, error) {
+	var zero T
+	paramType := reflect.TypeOf(zero)
+
+	if paramType.Kind() == reflect.Ptr {
+		paramType = paramType.Elem()
+	}
+
+	if paramType.Kind() != reflect.Struct {
+		return jobj.Schema{}, fmt.Errorf("second parameter must be a struct")
+	}
+
+	schema := jobj.Schema{
+		Name:        paramType.Name(),
+		Description: fmt.Sprintf("Schema for %s function parameters", paramType.Name()),
+		Fields:      make([]*jobj.Field, 0),
+		UseXML:      false,
+	}
+
+	for i := 0; i < paramType.NumField(); i++ {
+		field := paramType.Field(i)
+
+		if !field.IsExported() {
+			continue
+		}
+
+		jobjField := createFieldFromStructField(field)
+		if jobjField != nil {
+			schema.Fields = append(schema.Fields, jobjField)
+		}
+	}
+
+	if len(schema.Fields) == 0 {
+		return jobj.Schema{}, fmt.Errorf(
+			"no valid fields found in struct %s. Ensure fields are exported and of supported types",
+			paramType.Name(),
+		)
+	}
+
+	return schema, nil
+}
 
 // NewSchemaFromFunc creates a Schema from a function's second parameter type.
 // Returns an error if the function doesn't match signature func(context.Context, any)

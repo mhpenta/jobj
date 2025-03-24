@@ -11,6 +11,7 @@ Does not attempt to implement the entire spec, only a subset for creating dynami
 - Support for nested objects and arrays
 - Enum-like field constraints using `AnyOf`
 - Required/optional field specification
+- Generate JSON schemas from Go function signatures with the `funcschema` subpackage
 
 ## Usage And Examples
 
@@ -87,6 +88,35 @@ type Document struct {
     PublishDate JsonDate `json:"publish_date"`
 }
 ```
+
+### The funcschema Subpackage
+
+The `funcschema` subpackage allows you to automatically generate JSON schemas from Go function signatures. This is particularly useful for creating LLM tools that require parameter schemas.
+
+```go
+// Define your tool's parameter struct
+type SearchParams struct {
+    Query       string `json:"query" desc:"The search query string" required:"true"`
+    ContentType string `json:"content_type,omitempty" desc:"Optional filter by content type"`
+    Limit       int    `json:"limit,omitempty" desc:"Maximum number of results to return"`
+}
+
+// Create a function that uses the parameters
+func (t *SearchTool) ExecuteSearch(ctx context.Context, params SearchParams) (*ToolResult, error) {
+    // Implementation...
+}
+
+// Generate a JSON schema from the function
+func (t *SearchTool) Parameters() map[string]interface{} {
+    schema, err := funcschema.SafeSchemaFromFunc(t.ExecuteSearch)
+    if err != nil {
+        // Handle error
+    }
+    return schema
+}
+```
+
+This approach makes it easy to maintain type safety while automatically generating parameter schemas for LLM tools, eliminating the need to manually define and keep schemas in sync with your code.
 
 ## Contributing
 

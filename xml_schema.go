@@ -40,7 +40,7 @@ func (r *Schema) GetXMLSchemaString() string {
 
 	elements := make([]xsElement, 0, len(r.Fields))
 	for _, field := range r.Fields {
-		xsType := mapGoTypeToXSType(field.ValueType)
+		xsType := mapGoTypeToXSType(string(field.ValueType))
 		elem := xsElement{
 			Name: field.ValueName,
 			Type: xsType,

@@ -1,8 +1,19 @@
 package jobj
 
+type DataType string
+
+const (
+	TypeObject  DataType = "object"
+	TypeString  DataType = "string"
+	TypeNumber  DataType = "number"
+	TypeInteger DataType = "integer"
+	TypeBoolean DataType = "boolean"
+	TypeArray   DataType = "array"
+)
+
 type Field struct {
 	ValueName            string
-	ValueType            string
+	ValueType            DataType
 	ValueDescription     string
 	Value                string
 	ValueRequired        bool
@@ -19,7 +30,7 @@ type ConstDescription struct {
 func Text(name string) *Field {
 	vb := &Field{
 		ValueRequired: false,
-		ValueType:     "string",
+		ValueType:     TypeString,
 		ValueName:     name,
 		ValueAnyOf:    nil,
 	}
@@ -39,7 +50,7 @@ func AnyOf(name string, enums []ConstDescription) *Field {
 func Bool(name string) *Field {
 	vb := &Field{
 		ValueRequired: false,
-		ValueType:     "boolean",
+		ValueType:     TypeBoolean,
 		ValueName:     name,
 		ValueAnyOf:    nil,
 	}
@@ -49,7 +60,7 @@ func Bool(name string) *Field {
 func Float(name string) *Field {
 	vb := &Field{
 		ValueRequired: false,
-		ValueType:     "number",
+		ValueType:     TypeNumber,
 		ValueName:     name,
 		ValueAnyOf:    nil,
 	}
@@ -57,12 +68,31 @@ func Float(name string) *Field {
 }
 
 func Date(name string) *Field {
+	/*
+	   JSON Schema spec represents dates as strings with a "format" attribute.
+	   The proper schema would be: {"type": "string", "format": "date"}
+
+	   We don't implement format here for simplicity, keeping the Field struct
+	   minimal while covering the most common use cases for JSON Schema generation.
+
+	   Future enhancement: Add a ValueFormat field to the Field struct and update
+	   the schema generation to include format when specified:
+
+	   type Field struct {
+	       // existing fields...
+	       ValueFormat string // For date, date-time, email, etc.
+	   }
+
+	   Then schema generation would include:
+	   if field.ValueFormat != "" {
+	       fieldProps["format"] = field.ValueFormat
+	   }
+	*/
 	vb := &Field{
 		ValueRequired: false,
-		ValueType:     "string",
-		//ValueFormat: "date"
-		ValueName:  name,
-		ValueAnyOf: nil,
+		ValueType:     TypeString,
+		ValueName:     name,
+		ValueAnyOf:    nil,
 	}
 	return vb
 }
@@ -70,7 +100,7 @@ func Date(name string) *Field {
 func Array(name string, fields []*Field) *Field {
 	vb := &Field{
 		ValueRequired:        false,
-		ValueType:            "array",
+		ValueType:            TypeArray,
 		ValueName:            name,
 		ValueAnyOf:           nil,
 		SubFields:            fields,
@@ -82,7 +112,7 @@ func Array(name string, fields []*Field) *Field {
 func Int(name string) *Field {
 	vb := &Field{
 		ValueRequired: false,
-		ValueType:     "integer",
+		ValueType:     TypeInteger,
 		ValueName:     name,
 		ValueAnyOf:    nil,
 	}
@@ -92,7 +122,7 @@ func Int(name string) *Field {
 func Object(name string, fields []*Field) *Field {
 	vb := &Field{
 		ValueRequired:        false,
-		ValueType:            "object",
+		ValueType:            TypeObject,
 		ValueName:            name,
 		ValueAnyOf:           nil,
 		SubFields:            fields,
@@ -101,7 +131,7 @@ func Object(name string, fields []*Field) *Field {
 	return vb
 }
 
-func (vb *Field) Type(valueType string) *Field {
+func (vb *Field) Type(valueType DataType) *Field {
 	vb.ValueType = valueType
 	return vb
 }

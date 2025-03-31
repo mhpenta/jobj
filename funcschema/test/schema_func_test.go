@@ -11,9 +11,8 @@ import (
 type SearchTool struct{}
 
 type SearchToolParams struct {
-	ID         int     `desc:"ID of item to search" required:"true" `
-	Query      string  `desc:"Query to search for, e.g., xyz" required:"true"`
-	Confidence float64 `desc:"Confidence in the search, between 0 and 1"`
+	ID    int    `desc:"ID of item to search" required:"true" `
+	Query string `desc:"Query to search for, e.g., xyz" required:"true"`
 }
 
 func (f *SearchTool) SearchForData(ctx context.Context, params SearchToolParams) (string, error) {
@@ -34,10 +33,6 @@ func TestSearchTool_Parameters(t *testing.T) {
     "SearchToolParams": {
       "additionalProperties": false,
       "properties": {
-        "Confidence": {
-          "description": "Confidence in the search, between 0 and 1",
-          "type": "number"
-        },
         "ID": {
           "description": "ID of item to search",
           "type": "integer"
@@ -92,10 +87,6 @@ func TestSearchTool_ParametersV2(t *testing.T) {
     "SearchToolParams": {
       "additionalProperties": false,
       "properties": {
-        "Confidence": {
-          "description": "Confidence in the search, between 0 and 1",
-          "type": "number"
-        },
         "ID": {
           "description": "ID of item to search",
           "type": "integer"

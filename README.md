@@ -1,17 +1,43 @@
 # jobj
 
-`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining json data structures for the purpose of generating json schemas in context of requesting specific json objects from large language models. Works in a very limited capacity with XML schemas.
+`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining JSON data structures for generating JSON schemas specifically in the context of requesting structured JSON objects from large language models (LLMs). It also works in a very limited capacity with XML schemas.
 
-Does not attempt to implement the entire spec, only a subset for creating dynamic json schemas. 
+## JSON Schema Specification Coverage
+
+This package implements a focused subset of the [JSON Schema Draft-07](https://json-schema.org/specification-links.html#draft-7) specification, prioritizing the elements most useful for LLM interactions:
+
+### Implemented
+- Core schema structure with `$schema`, `definitions`, and `$ref`
+- Object type definitions with properties and typing
+- Required/optional field specification
+- Property descriptions
+- Basic property types: string, number, integer, boolean
+- Nested objects and arrays
+- Enum-like constraints using `anyOf`
+- Default value specification
+- `additionalProperties` field control
+
+### Not Implemented
+- Format validation (except for custom `JsonDateTime` type)
+- Regular expression pattern validation
+- Numeric constraints (minimum, maximum, etc.)
+- String constraints (minLength, maxLength, etc.)
+- Array constraints (minItems, maxItems, etc.)
+- Schema composition (allOf, oneOf, not)
+- External schema references
+- Conditional schemas (if-then-else)
 
 ## Features
 
-- API for schema definition
-- JSON to Go date type handling with `JsonDate`
+- Clean API for schema definition with chainable methods
+- Custom JSON date/time handling with `JsonDateTime` type supporting multiple formats
 - Support for nested objects and arrays
 - Enum-like field constraints using `AnyOf`
 - Required/optional field specification
-- Generate JSON schemas from Go function signatures with the `funcschema` subpackage
+- XML schema generation (limited subset)
+- Generate JSON schemas from Go function signatures via the `funcschema` subpackage
+- Validation against Go structs
+- Struct tag parsing for automated schema generation
 
 ## Usage And Examples
 
@@ -19,30 +45,75 @@ Does not attempt to implement the entire spec, only a subset for creating dynami
 go get github.com/mhpenta/jobj
 ```
 
+### Basic Schema Definition
+
 ```go
 package main
 
 import "github.com/mhpenta/jobj"
 
 type HeadlinesResponse struct {
-    jobj.Response
+    jobj.Schema
 }
 
 func NewHeadlineResponse() *HeadlinesResponse {
-    h := &HeadlinesResponse{}
-    h.Name = "HeadlinesResponse"
-    h.Description = "Response schema for press release headline extraction"
-    h.Fields = []*jobj.Field{
-        jobj.Text("headline").
-            Desc("The exact headline from the press release").
-            Required(),
-        jobj.Float("confidence").
-            Desc("Confidence score for the extraction").
-            Required(),
-    }
-    return h
+	h := &HeadlinesResponse{}
+	h.Name = "HeadlinesResponse"
+	h.Description = "Response schema for press release headline extraction"
+	h.Fields = []*jobj.Field{
+		jobj.Text("headline").
+			Desc("The exact headline from the press release (in proper case)").
+			Required(),
+		jobj.Text("headline_without_company_name").
+			Desc("The headline from the press release modified to remove the company name (in proper case)").
+			Required(),
+		jobj.Float("confidence").
+			Desc("Confidence in the headlines extracted").
+			Required(),
+	}
+	return h
 }
+
+// Generate JSON schema
+schema := NewHeadlineResponse()
+schemaJSON := schema.GetSchemaString()
+fmt.Println(schemaJSON)
 ```
+
+Prints:
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "HeadlinesResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "description": "Confidence in the headlines extracted",
+          "type": "number"
+        },
+        "headline": {
+          "description": "The exact headline from the press release (in proper case)",
+          "type": "string"
+        },
+        "headline_without_company_name": {
+          "description": "The headline from the press release modified to remove the company name (in proper case)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "headline",
+        "headline_without_company_name",
+        "confidence"
+      ],
+      "type": "object"
+    }
+  },
+  "$ref": "#/definitions/HeadlinesResponse"
+}
+
+```
+
 
 ### Field Types
 
@@ -52,7 +123,7 @@ The package supports various field types:
 - `Bool(name string)` - Boolean fields
 - `Float(name string)` - Floating-point numbers
 - `Int(name string)` - Integer fields
-- `Date(name string)` - Date fields using the custom JsonDate type
+- `Date(name string)` - Date fields using the custom JsonDateTime type
 - `Array(name string, fields []*Field)` - Array of objects
 - `Object(name string, fields []*Field)` - Nested object structures
 - `AnyOf(name string, enums []ConstDescription)` - Enumerated values
@@ -70,24 +141,21 @@ jobj.Text("field").
     SetValue("default")        // Set default value
 ```
 
-### Schema Generation
+### Working with JsonDateTime
 
-Generate JSON schema:
-
-```go
-response := NewHeadlineResponse()
-schemaJSON := response.GetSchemaString()
-```
-
-### Working with JsonDate
-
-The package includes a custom `JsonDate` type for handling dates in YYYY-MM-DD format:
+The package includes a custom `JsonDateTime` type for handling dates:
 
 ```go
 type Document struct {
-    PublishDate JsonDate `json:"publish_date"`
+    PublishDate JsonDateTime `json:"publish_date"`
 }
 ```
+
+The `JsonDateTime` type offers robust date parsing that handles multiple formats, including:
+- ISO 8601/RFC3339 (2006-01-02T15:04:05Z)
+- RFC3339 with timezone (2006-01-02T15:04:05-07:00)
+- Simple date format (2006-01-02)
+- Various other common time formats
 
 ### The funcschema Subpackage
 
@@ -95,14 +163,13 @@ The `funcschema` subpackage allows you to automatically generate JSON schemas fr
 
 ```go
 // Define your tool's parameter struct
-type SearchParams struct {
-    Query       string `json:"query" desc:"The search query string" required:"true"`
-    ContentType string `json:"content_type,omitempty" desc:"Optional filter by content type"`
-    Limit       int    `json:"limit,omitempty" desc:"Maximum number of results to return"`
+type SearchToolParams struct {
+    ID    int    `desc:"ID of item to search" required:"true" `
+    Query string `desc:"Query to search for, e.g., xyz" required:"true"`
 }
 
 // Create a function that uses the parameters
-func (t *SearchTool) ExecuteSearch(ctx context.Context, params SearchParams) (*ToolResult, error) {
+func (t *SearchTool) ExecuteSearch(ctx context.Context, params SearchToolParams) (*ToolResult, error) {
     // Implementation...
 }
 
@@ -114,9 +181,68 @@ func (t *SearchTool) Parameters() map[string]interface{} {
     }
     return schema
 }
+
+// Called by the agent
+func (t *SearchTool) Execute(ctx context.Context, params json.RawMessage) (*tools.ToolResult, error) {
+    var paramsStruct *SearchToolParams
+    if err := json.Unmarshal(params, paramsStruct); err != nil {
+        // Handle error
+    }
+    
+    searchResult, err := t.ExecuteSearch(ctx, paramsStruct)
+    if err != nil {
+        // Handle error
+    }
+	return searchResult, nil
+}
 ```
 
-This approach makes it easy to maintain type safety while automatically generating parameter schemas for LLM tools, eliminating the need to manually define and keep schemas in sync with your code.
+The `funcschema` subpackage's schema for tool use looks like: 
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "SearchToolParams": {
+      "additionalProperties": false,
+      "properties": {
+        "ID": {
+          "description": "ID of item to search",
+          "type": "integer"
+        },
+        "Query": {
+          "description": "Query to search for, e.g., xyz",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ID",
+        "Query"
+      ],
+      "type": "object"
+    }
+  },
+  "$ref": "#/definitions/SearchToolParams"
+}
+```
+
+The `funcschema` subpackage offers several options:
+- `SchemaFromStruct[T]()` - Generate schema directly from a struct type
+- `NewSchemaFromFuncV2()` - Type-safe schema generation with generics
+- `NewSchemaFromFunc()` - Non-generic version for compatibility
+- `GetPropertiesMap()` - Convert schema to a properties map for LLM tool definitions
+
+### XML Schema Support
+
+While primarily focused on JSON Schema, `jobj` provides limited XML Schema generation via the `GetXMLSchemaString()` method:
+
+```go
+schema := NewHeadlineResponse()
+schema.UseXML = true
+xmlSchema := schema.GetXMLSchemaString()
+```
+
+XML support is limited to basic type mapping and does not implement the full XML Schema specification.
 
 ## Contributing
 
@@ -124,31 +250,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-BSD 3-Clause License
+MIT License
 
-Copyright (c) 2025, github.com/mhpenta 
+Copyright (c) 2025, github.com/mhpenta
 
 All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-Redistributions of source code must retain the above copyright notice, this
-list of conditions and the following disclaimer.
-Redistributions in binary form must reproduce the above copyright notice,
-this list of conditions and the following disclaimer in the documentation
-and/or other materials provided with the distribution.
-Neither the name of the copyright holder nor the names of its
-contributors may be used to endorse or promote products derived from
-this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

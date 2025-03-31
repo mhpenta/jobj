@@ -65,7 +65,7 @@ func (r *Schema) GetSchemaString() string {
 }
 
 func (r *Schema) FieldsJson() map[string]interface{} {
-	properties := make(map[string]interface{})
+	properties := make(map[string]interface{}, len(r.Fields))
 	for _, field := range r.Fields {
 		if field.ValueAnyOf != nil {
 			anyOf := make([]map[string]interface{}, 0, len(field.ValueAnyOf))
@@ -130,7 +130,7 @@ func (r *Schema) FieldsJson() map[string]interface{} {
 				}
 
 				arrayFieldProperties[subField.ValueName] = map[string]string{
-					"type":        subField.ValueType,
+					"type":        string(subField.ValueType),
 					"description": subField.ValueDescription,
 				}
 			}
@@ -160,7 +160,7 @@ func (r *Schema) FieldsJson() map[string]interface{} {
 		}
 
 		properties[field.ValueName] = map[string]string{
-			"type":        field.ValueType,
+			"type":        string(field.ValueType),
 			"description": field.ValueDescription,
 		}
 	}
@@ -168,7 +168,7 @@ func (r *Schema) FieldsJson() map[string]interface{} {
 }
 
 func (r *Schema) RequiredFields() []string {
-	var required []string
+	required := make([]string, 0, len(r.Fields))
 	for _, field := range r.Fields {
 		if field.ValueType == "array" && field.ValueRequired {
 			required = append(required, field.ValueName)
@@ -249,7 +249,7 @@ func processObjectFields(fields []*Field) map[string]interface{} {
 		}
 
 		objectFieldProperties[field.ValueName] = map[string]string{
-			"type":        field.ValueType,
+			"type":        string(field.ValueType),
 			"description": field.ValueDescription,
 		}
 	}

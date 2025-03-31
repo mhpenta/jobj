@@ -1,9 +1,8 @@
-package test
+package funcschema
 
 import (
 	"context"
 	"fmt"
-	"github.com/mhpenta/jobj/funcschema"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -22,7 +21,7 @@ func (f *SearchTool) SearchForData(ctx context.Context, params SearchToolParams)
 func TestSearchTool_Parameters(t *testing.T) {
 	searchTool := &SearchTool{}
 
-	schema, err := funcschema.NewSchemaFromFunc(searchTool.SearchForData)
+	schema, err := NewSchemaFromFunc(searchTool.SearchForData)
 	if err != nil {
 		t.Error(err)
 	}
@@ -54,7 +53,7 @@ func TestSearchTool_Parameters(t *testing.T) {
 
 	assert.Equal(t, correct, schema.GetSchemaString())
 
-	paramsMap := funcschema.GetPropertiesMap(schema)
+	paramsMap := GetPropertiesMap(schema)
 
 	if paramsMap["properties"].(map[string]interface{})["ID"].(map[string]string)["type"] != "integer" {
 		t.Error("ID field should be integer type")
@@ -76,7 +75,7 @@ func TestSearchTool_Parameters(t *testing.T) {
 func TestSearchTool_ParametersV2(t *testing.T) {
 	searchTool := &SearchTool{}
 
-	schema, err := funcschema.NewSchemaFromFuncV2(searchTool.SearchForData)
+	schema, err := NewSchemaFromFuncV2(searchTool.SearchForData)
 	if err != nil {
 		t.Error(err)
 	}
@@ -108,7 +107,7 @@ func TestSearchTool_ParametersV2(t *testing.T) {
 
 	assert.Equal(t, correct, schema.GetSchemaString())
 
-	paramsMap := funcschema.GetPropertiesMap(schema)
+	paramsMap := GetPropertiesMap(schema)
 
 	if paramsMap["properties"].(map[string]interface{})["ID"].(map[string]string)["type"] != "integer" {
 		t.Error("ID field should be integer type")

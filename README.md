@@ -169,7 +169,7 @@ type SearchToolParams struct {
 }
 
 // Create a function that uses the parameters
-func (t *SearchTool) ExecuteSearch(ctx context.Context, params SearchToolParams) (*ToolResult, error) {
+func (t *SearchTool) ExecuteSearch(ctx context.Context, params *SearchToolParams) (*ToolResult, error) {
     // Implementation...
 }
 

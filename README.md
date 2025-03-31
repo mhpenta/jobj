@@ -1,6 +1,10 @@
 # jobj
 
-`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining JSON data structures for generating JSON schemas specifically in the context of requesting structured JSON objects from large language models (LLMs). It also works in a very limited capacity with XML schemas.
+`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining JSON data structures for generating JSON schemas specifically in the context of requesting structured JSON objects from large language models (LLMs). It also provides limited support for XML schemas
+
+## Why `jobj`?
+
+If you want to create a json schema from a struct, you can use packages like [jsonschema](https://github.com/invopop/jsonschema) that use reflection and field tags. However, using tags creates ergonomic challenges for the programmer, specifically if you ever require a long description on a field. `jobj` is designed to get around this ergonomic issue and to create json object tooling for LLM development, which requires only a subset of the json schema. 
 
 ## JSON Schema Specification Coverage
 
@@ -135,8 +139,8 @@ Fields can be customized using chainable modifiers:
 ```go
 jobj.Text("field").
     Desc("Field description").  // Add description
-    Required().                 // Mark as required
-    Optional().                // Mark as optional
+    Required().                 // Mark as required (adds field name to schema's "required" array)
+    Optional().                // Mark as optional (removes field from "required" array)
     Type("custom_type").       // Set custom type
     SetValue("default")        // Set default value
 ```

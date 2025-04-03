@@ -49,7 +49,7 @@ var ErrExpectedJSONArray = errors.New("expected JSON array for array type")
 //	type MyStruct struct {
 //	    // fields
 //	}
-//	result, err := SafeUnmarshallToAny[MyStruct](jsonString)
+//	result, err := safeunmarshall.ToAny[MyStruct](jsonString)
 //	if err != nil {
 //	    if errors.Is(err, ErrExpectedJSONArray) {
 //	        // Handle case where array was expected but not received

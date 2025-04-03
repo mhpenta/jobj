@@ -1,29 +1,18 @@
 // Package safeunmarshall provides utilities for safely unmarshalling JSON data.
-//
-// Copyright (C) 2025 mhpenta (https://github.com/mhpenta)
-//
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
 package safeunmarshall
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"reflect"
 	"strings"
 )
 
-// ErrExpectedJSONArray is returned when the response being unmarshalled is not a JSON array in our unmarshaller
-// utilities
-var ErrExpectedJSONArray = errors.New("expected JSON array for array type")
-
 // To attempts to unmarshal a JSON string into a value of type T.
 //
-// This function is more flexible than SafeUnmarshallToStructPtr as it can handle
-// various types, including arrays and slices. It first attempts to unmarshal the
-// provided JSON string directly. If that fails, it tries to repair the JSON before
+// This function can handle various types, including arrays and slices. It first attempts
+// to unmarshal the provided JSON string directly. If that fails, it tries to repair the JSON before
 // attempting to unmarshal again.
 //
 // Parameters:

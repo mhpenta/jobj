@@ -19,7 +19,7 @@ import (
 // utilities
 var ErrExpectedJSONArray = errors.New("expected JSON array for array type")
 
-// ToAny attempts to unmarshal a JSON string into a value of type T.
+// To attempts to unmarshal a JSON string into a value of type T.
 //
 // This function is more flexible than SafeUnmarshallToStructPtr as it can handle
 // various types, including arrays and slices. It first attempts to unmarshal the
@@ -49,7 +49,7 @@ var ErrExpectedJSONArray = errors.New("expected JSON array for array type")
 //	type MyStruct struct {
 //	    // fields
 //	}
-//	result, err := safeunmarshall.ToAny[MyStruct](jsonString)
+//	result, err := safeunmarshall.To[MyStruct](jsonString)
 //	if err != nil {
 //	    if errors.Is(err, ErrExpectedJSONArray) {
 //	        // Handle case where array was expected but not received
@@ -57,7 +57,7 @@ var ErrExpectedJSONArray = errors.New("expected JSON array for array type")
 //	        // Handle other errors
 //	    }
 //	}
-func ToAny[T any](raw []byte) (T, error) {
+func To[T any](raw []byte) (T, error) {
 	data := prepareStringWithJsonForUnmarshalling(string(raw))
 
 	// remove newlines - unnecessary for parsing and can cause issues with multi-line strings

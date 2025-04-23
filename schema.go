@@ -2,6 +2,7 @@ package jobj
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"reflect"
 	"strings"
@@ -215,6 +216,107 @@ func (r *Schema) Validate(container interface{}) bool {
 	return true
 }
 
+// ValidateAgainstStructFields verifies that the schema fields match the struct fields.
+// It checks:
+// - Every schema field has a corresponding struct field with matching JSON tag
+// - Every required struct field (no omitempty tag) has a corresponding schema field
+// - Type compatibility between schema fields and struct fields
+// Returns detailed error messages for any mismatches.
+func (r *Schema) ValidateAgainstStructFields(structPtr interface{}) error {
+	val := reflect.ValueOf(structPtr)
+	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+		return fmt.Errorf("input must be a pointer to a struct")
+	}
+
+	structType := val.Elem().Type()
+
+	schemaFields := make(map[string]*Field)
+	for _, field := range r.Fields {
+		schemaFields[field.ValueName] = field
+	}
+
+	structFields := make(map[string]reflect.StructField)
+	requiredStructFields := make(map[string]bool)
+
+	for i := 0; i < structType.NumField(); i++ {
+		field := structType.Field(i)
+
+		// Skip the embedded Schema field
+		if field.Anonymous && field.Type.Name() == "Schema" {
+			continue
+		}
+
+		jsonTag := field.Tag.Get("json")
+		if jsonTag == "" || jsonTag == "-" {
+			continue
+		}
+
+		parts := strings.Split(jsonTag, ",")
+		jsonName := parts[0]
+		isOmitEmpty := false
+
+		for _, opt := range parts[1:] {
+			if opt == "omitempty" {
+				isOmitEmpty = true
+				break
+			}
+		}
+
+		structFields[jsonName] = field
+		if !isOmitEmpty {
+			requiredStructFields[jsonName] = true
+		}
+	}
+
+	var errors []string
+
+	for name, schemaField := range schemaFields {
+		structField, exists := structFields[name]
+		if !exists {
+			errors = append(errors, fmt.Sprintf("schema field %q does not exist in struct", name))
+			continue
+		}
+
+		if !isTypeCompatible(structField.Type, schemaField.ValueType) {
+			errors = append(errors, fmt.Sprintf("schema field %q has type %q but struct field has incompatible type %q",
+				name, schemaField.ValueType, structField.Type.String()))
+		}
+	}
+
+	for name, isRequired := range requiredStructFields {
+		if !isRequired {
+			continue
+		}
+
+		_, exists := schemaFields[name]
+		if !exists {
+			errors = append(errors, fmt.Sprintf("required struct field %q does not exist in schema", name))
+		}
+	}
+
+	for name, field := range schemaFields {
+		if !field.ValueRequired {
+			continue
+		}
+
+		structField, exists := structFields[name]
+		if !exists {
+			continue
+		}
+
+		jsonTag := structField.Tag.Get("json")
+		if strings.Contains(jsonTag, "omitempty") {
+			errors = append(errors, fmt.Sprintf("schema field %q is required but struct field has omitempty tag", name))
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("schema validation errors: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
+}
+
 func (f *Field) getRequiredFields() []string {
 	var required []string
 	for _, subField := range f.SubFields {
@@ -254,4 +356,34 @@ func processObjectFields(fields []*Field) map[string]interface{} {
 		}
 	}
 	return objectFieldProperties
+}
+
+func isTypeCompatible(goType reflect.Type, schemaType DataType) bool {
+	if goType.Kind() == reflect.Ptr {
+		goType = goType.Elem()
+	}
+
+	switch schemaType {
+	case "string":
+		return goType.Kind() == reflect.String
+	case "number":
+		return goType.Kind() == reflect.Float32 || goType.Kind() == reflect.Float64
+	case "integer":
+		return goType.Kind() == reflect.Int || goType.Kind() == reflect.Int8 ||
+			goType.Kind() == reflect.Int16 || goType.Kind() == reflect.Int32 ||
+			goType.Kind() == reflect.Int64 || goType.Kind() == reflect.Uint ||
+			goType.Kind() == reflect.Uint8 || goType.Kind() == reflect.Uint16 ||
+			goType.Kind() == reflect.Uint32 || goType.Kind() == reflect.Uint64
+	case "boolean":
+		return goType.Kind() == reflect.Bool
+	case "array":
+		return goType.Kind() == reflect.Slice || goType.Kind() == reflect.Array
+	case "object":
+		return goType.Kind() == reflect.Struct || goType.Kind() == reflect.Map
+	case "anyOf":
+		return true
+	default:
+		// For unknown types, we're permissive
+		return true
+	}
 }

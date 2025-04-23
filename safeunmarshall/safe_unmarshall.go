@@ -76,6 +76,11 @@ func To[T any](raw []byte) (T, error) {
 			return zero, fmt.Errorf("failed to repair JSON: %w", repairErr)
 		}
 
+		if repairedData == "" {
+			var zero T
+			return zero, fmt.Errorf("JSON repair resulted in empty string")
+		}
+
 		err = json.Unmarshal([]byte(repairedData), &response)
 		if err != nil {
 			var zero T

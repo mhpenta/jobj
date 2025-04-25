@@ -54,7 +54,10 @@ go get github.com/mhpenta/jobj
 ```go
 package main
 
-import "github.com/mhpenta/jobj"
+import (
+	"github.com/mhpenta/jobj"
+	"github.com/mhpenta/jobj/safeunmarshall"
+)
 
 type HeadlinesResponse struct {
     jobj.Schema
@@ -166,6 +169,13 @@ The `JsonDateTime` type offers robust date parsing that handles multiple formats
 The `funcschema` subpackage allows you to automatically generate JSON schemas from Go function signatures. This is particularly useful for creating LLM tools that require parameter schemas.
 
 ```go
+import (
+	"context"
+	"encoding/json"
+	"github.com/mhpenta/jobj/funcschema"
+	"github.com/mhpenta/jobj/safeunmarshall"
+)
+
 // Define your tool's parameter struct
 type SearchToolParams struct {
     ID    int    `desc:"ID of item to search" required:"true" `
@@ -188,12 +198,12 @@ func (t *SearchTool) Parameters() map[string]interface{} {
 
 // Called by the agent
 func (t *SearchTool) Execute(ctx context.Context, params json.RawMessage) (*tools.ToolResult, error) {
-    var paramsStruct *SearchToolParams
-    if err := json.Unmarshal(params, paramsStruct); err != nil {
+    paramsStruct, err := safeunmarshall.To[SearchToolParams](params)
+    if err != nil {
         // Handle error
     }
     
-    searchResult, err := t.ExecuteSearch(ctx, paramsStruct)
+    searchResult, err := t.ExecuteSearch(ctx, &paramsStruct)
     if err != nil {
         // Handle error
     }

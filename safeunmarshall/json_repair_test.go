@@ -11,6 +11,7 @@ package safeunmarshall
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strconv"
 	"testing"
@@ -474,4 +475,196 @@ func jsonEqual(json1, json2 string) bool {
 	}
 
 	return reflect.DeepEqual(obj1, obj2)
+}
+
+// TestTo tests the generic To function for unmarshalling JSON into various types
+func TestTo(t *testing.T) {
+	// Define test struct types
+	type SimpleStruct struct {
+		Name  string  `json:"name"`
+		Age   int     `json:"age"`
+		Score float64 `json:"score"`
+	}
+
+	type NestedStruct struct {
+		Title  string       `json:"title"`
+		Person SimpleStruct `json:"person"`
+		Active bool         `json:"active"`
+	}
+
+	type ArrayContainer struct {
+		Items []SimpleStruct `json:"items"`
+	}
+
+	// Test cases
+	tests := []struct {
+		name           string
+		input          string
+		expectedOutput interface{}
+		expectErr      bool
+		expectedErrIs  error
+	}{
+		{
+			name:  "Valid simple struct",
+			input: `{"name": "John", "age": 30, "score": 95.5}`,
+			expectedOutput: SimpleStruct{
+				Name:  "John",
+				Age:   30,
+				Score: 95.5,
+			},
+		},
+		{
+			name:  "Valid nested struct",
+			input: `{"title": "Profile", "person": {"name": "Jane", "age": 25, "score": 98.2}, "active": true}`,
+			expectedOutput: NestedStruct{
+				Title: "Profile",
+				Person: SimpleStruct{
+					Name:  "Jane",
+					Age:   25,
+					Score: 98.2,
+				},
+				Active: true,
+			},
+		},
+		{
+			name:  "Valid array",
+			input: `{"items": [{"name": "Alice", "age": 35, "score": 92.7}, {"name": "Bob", "age": 40, "score": 88.3}]}`,
+			expectedOutput: ArrayContainer{
+				Items: []SimpleStruct{
+					{Name: "Alice", Age: 35, Score: 92.7},
+					{Name: "Bob", Age: 40, Score: 88.3},
+				},
+			},
+		},
+		{
+			name:  "Single-quoted keys and values",
+			input: `{'name': 'John', 'age': 30, 'score': 95.5}`,
+			expectedOutput: SimpleStruct{
+				Name:  "John",
+				Age:   30,
+				Score: 95.5,
+			},
+		},
+		{
+			name:  "Unquoted keys",
+			input: `{name: "John", age: 30, score: 95.5}`,
+			expectedOutput: SimpleStruct{
+				Name:  "John",
+				Age:   30,
+				Score: 95.5,
+			},
+		},
+		{
+			name:  "Trailing commas",
+			input: `{"name": "John", "age": 30, "score": 95.5,}`,
+			expectedOutput: SimpleStruct{
+				Name:  "John",
+				Age:   30,
+				Score: 95.5,
+			},
+		},
+		{
+			name:  "JSON with code block markdown",
+			input: "```json\n{\"name\": \"John\", \"age\": 30, \"score\": 95.5}\n```",
+			expectedOutput: SimpleStruct{
+				Name:  "John",
+				Age:   30,
+				Score: 95.5,
+			},
+		},
+		{
+			name:      "Empty input",
+			input:     "",
+			expectErr: true,
+		},
+		{
+			name:      "Invalid JSON structure",
+			input:     `{"name": "John", "age": 30, "score": 95.5}`,
+			expectedOutput: SimpleStruct{
+				Name:  "John",
+				Age:   30,
+				Score: 95.5,
+			},
+			expectErr: false,
+		},
+		{
+			name:          "Non-array when expecting array",
+			input:         `{"name": "John"}`,
+			expectErr:     true,
+			expectedErrIs: ErrExpectedJSONArray,
+			expectedOutput: []SimpleStruct{
+				{Name: "John"},
+			},
+		},
+		{
+			name:      "Invalid field type",
+			input:     `{"name": "John", "age": "thirty", "score": 95.5}`,
+			expectErr: true,
+		},
+		{
+			name:  "Repair array with mixed quotes",
+			input: `{"items": [{'name': "Alice", 'age': 35, 'score': 92.7}, {'name': "Bob", 'age': 40, 'score': 88.3}]}`,
+			expectedOutput: ArrayContainer{
+				Items: []SimpleStruct{
+					{Name: "Alice", Age: 35, Score: 92.7},
+					{Name: "Bob", Age: 40, Score: 88.3},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			switch expectedOutput := tt.expectedOutput.(type) {
+			case SimpleStruct:
+				result, err := To[SimpleStruct]([]byte(tt.input))
+				if (err != nil) != tt.expectErr {
+					t.Errorf("To() error = %v, expectErr %v", err, tt.expectErr)
+					return
+				}
+				if tt.expectedErrIs != nil && !errors.Is(err, tt.expectedErrIs) {
+					t.Errorf("Expected error to be %v, got %v", tt.expectedErrIs, err)
+				}
+				if err == nil && !reflect.DeepEqual(result, expectedOutput) {
+					t.Errorf("To() = %v, want %v", result, expectedOutput)
+				}
+			case NestedStruct:
+				result, err := To[NestedStruct]([]byte(tt.input))
+				if (err != nil) != tt.expectErr {
+					t.Errorf("To() error = %v, expectErr %v", err, tt.expectErr)
+					return
+				}
+				if tt.expectedErrIs != nil && !errors.Is(err, tt.expectedErrIs) {
+					t.Errorf("Expected error to be %v, got %v", tt.expectedErrIs, err)
+				}
+				if err == nil && !reflect.DeepEqual(result, expectedOutput) {
+					t.Errorf("To() = %v, want %v", result, expectedOutput)
+				}
+			case ArrayContainer:
+				result, err := To[ArrayContainer]([]byte(tt.input))
+				if (err != nil) != tt.expectErr {
+					t.Errorf("To() error = %v, expectErr %v", err, tt.expectErr)
+					return
+				}
+				if tt.expectedErrIs != nil && !errors.Is(err, tt.expectedErrIs) {
+					t.Errorf("Expected error to be %v, got %v", tt.expectedErrIs, err)
+				}
+				if err == nil && !reflect.DeepEqual(result, expectedOutput) {
+					t.Errorf("To() = %v, want %v", result, expectedOutput)
+				}
+			case []SimpleStruct:
+				result, err := To[[]SimpleStruct]([]byte(tt.input))
+				if (err != nil) != tt.expectErr {
+					t.Errorf("To() error = %v, expectErr %v", err, tt.expectErr)
+					return
+				}
+				if tt.expectedErrIs != nil && !errors.Is(err, tt.expectedErrIs) {
+					t.Errorf("Expected error to be %v, got %v", tt.expectedErrIs, err)
+				}
+				if err == nil && !reflect.DeepEqual(result, expectedOutput) {
+					t.Errorf("To() = %v, want %v", result, expectedOutput)
+				}
+			}
+		})
+	}
 }

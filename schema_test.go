@@ -10,9 +10,9 @@ func TestResponseWithMatchingFields(t *testing.T) {
 	resp := NewValidTestResponse()
 
 	// Validate the schema against the struct
-	err := resp.ValidateAgainstStructFields(resp)
+	err := resp.Validate(resp)
 	if err != nil {
-		t.Errorf("ValidateAgainstStructFields failed for valid struct: %v", err)
+		t.Errorf("Validate failed for valid struct: %v", err)
 	}
 }
 
@@ -22,9 +22,9 @@ func TestResponseWithMissingFieldInSchema(t *testing.T) {
 	resp := NewMissingSchemaFieldTestResponse()
 
 	// Validation should fail because the required struct field is missing from schema
-	err := resp.ValidateAgainstStructFields(resp)
+	err := resp.Validate(resp)
 	if err == nil {
-		t.Error("ValidateAgainstStructFields should have failed for missing schema field")
+		t.Error("Validate should have failed for missing schema field")
 	}
 }
 
@@ -34,9 +34,9 @@ func TestResponseWithMissingFieldInStruct(t *testing.T) {
 	resp := NewMissingStructFieldTestResponse()
 
 	// Validation should fail because schema field doesn't exist in struct
-	err := resp.ValidateAgainstStructFields(resp)
+	err := resp.Validate(resp)
 	if err == nil {
-		t.Error("ValidateAgainstStructFields should have failed for missing struct field")
+		t.Error("Validate should have failed for missing struct field")
 	}
 }
 
@@ -46,9 +46,9 @@ func TestTypeMismatchValidation(t *testing.T) {
 	resp := NewTypeMismatchTestResponse()
 
 	// Validation should fail because of type mismatch
-	err := resp.ValidateAgainstStructFields(resp)
+	err := resp.Validate(resp)
 	if err == nil {
-		t.Error("ValidateAgainstStructFields should have failed for type mismatch")
+		t.Error("Validate should have failed for type mismatch")
 	}
 }
 
@@ -58,9 +58,9 @@ func TestOmitemptyMismatchValidation(t *testing.T) {
 	resp := NewOmitemptyMismatchTestResponse()
 
 	// Validation should fail because required field has omitempty tag
-	err := resp.ValidateAgainstStructFields(resp)
+	err := resp.Validate(resp)
 	if err == nil {
-		t.Error("ValidateAgainstStructFields should have failed for omitempty mismatch")
+		t.Error("Validate should have failed for omitempty mismatch")
 	}
 }
 
@@ -70,9 +70,9 @@ func TestEmbeddedFieldsValidation(t *testing.T) {
 	resp := NewEmbeddedFieldsTestResponse()
 
 	// Validation should succeed for properly configured embedded fields
-	err := resp.ValidateAgainstStructFields(resp)
+	err := resp.Validate(resp)
 	if err != nil {
-		t.Errorf("ValidateAgainstStructFields failed for valid embedded fields: %v", err)
+		t.Errorf("Validate failed for valid embedded fields: %v", err)
 	}
 }
 
@@ -191,12 +191,12 @@ func NewEmbeddedFieldsTestResponse() *EmbeddedFieldsTestResponse {
 	r := &EmbeddedFieldsTestResponse{}
 	r.Name = "EmbeddedFieldsTestResponse"
 	r.Description = "A test response with embedded fields"
-	
+
 	dataFields := []*Field{
 		Text("value").Desc("The value field").Required(),
 		Int("count").Desc("The count field").Required(),
 	}
-	
+
 	r.Fields = []*Field{
 		Text("name").Desc("The name field").Required(),
 		Object("data", dataFields).Desc("The embedded data object").Required(),

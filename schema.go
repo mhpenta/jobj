@@ -187,42 +187,13 @@ func (r *Schema) RequiredFields() []string {
 	return required
 }
 
-// Validate checks if the response fields are present in the container struct, which must be passed into it since the
-// embedded Schema struct does not have access to the container struct. Validation proves that the schema requested
-// is able to be Marshalled by the container struct. Mostly used in testing. Returns true if all fields are present,
-func (r *Schema) Validate(container interface{}) bool {
-	containerValue := reflect.ValueOf(container)
-	containerType := containerValue.Type()
-	if containerType.Kind() != reflect.Struct && !(containerType.Kind() == reflect.Ptr && containerType.Elem().Kind() == reflect.Struct) {
-		return false
-	}
-	if containerType.Kind() == reflect.Ptr {
-		containerValue = containerValue.Elem()
-		containerType = containerType.Elem()
-	}
-	fieldNames := make(map[string]struct{}, containerType.NumField())
-	for i := 0; i < containerType.NumField(); i++ {
-		field := containerType.Field(i)
-		if field.Name != "Schema" {
-			fieldNames[field.Tag.Get("json")] = struct{}{}
-		}
-	}
-	for _, field := range r.Fields {
-		fieldName := strings.ToLower(field.ValueName)
-		if _, exists := fieldNames[fieldName]; !exists {
-			return false
-		}
-	}
-	return true
-}
-
-// ValidateAgainstStructFields verifies that the schema fields match the struct fields.
+// Validate verifies that the schema fields match the struct fields.
 // It checks:
 // - Every schema field has a corresponding struct field with matching JSON tag
 // - Every required struct field (no omitempty tag) has a corresponding schema field
 // - Type compatibility between schema fields and struct fields
 // Returns detailed error messages for any mismatches.
-func (r *Schema) ValidateAgainstStructFields(structPtr interface{}) error {
+func (r *Schema) Validate(structPtr interface{}) error {
 	val := reflect.ValueOf(structPtr)
 	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
 		return fmt.Errorf("input must be a pointer to a struct")

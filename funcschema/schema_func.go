@@ -39,7 +39,6 @@ func NewSchemaFromFuncV2[T any, R any](function func(context.Context, T) (R, err
 		Name:        paramType.Name(),
 		Description: fmt.Sprintf("Schema for %s function parameters", paramType.Name()),
 		Fields:      make([]*jobj.Field, 0),
-		UseXML:      false,
 	}
 
 	for i := 0; i < paramType.NumField(); i++ {
@@ -102,7 +101,6 @@ func NewSchemaFromFunc(function interface{}) (jobj.Schema, error) {
 		Name:        paramType.Name(),
 		Description: fmt.Sprintf("Schema for %s function parameters", paramType.Name()),
 		Fields:      make([]*jobj.Field, 0),
-		UseXML:      false,
 	}
 
 	for i := 0; i < paramType.NumField(); i++ {

@@ -18,7 +18,6 @@ type CreatableSchema interface {
 type Schema struct {
 	Name        string
 	Description string
-	UseXML      bool
 	Fields      []*Field
 }
 
@@ -31,10 +30,6 @@ func (r *Schema) GetFields() []*Field {
 }
 
 func (r *Schema) GetSchemaString() string {
-	if r.UseXML {
-		return r.GetXMLSchemaString()
-	}
-
 	schema := struct {
 		Schema      string                 `json:"$schema"`
 		Definitions map[string]interface{} `json:"definitions"`

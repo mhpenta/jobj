@@ -1,10 +1,10 @@
 # jobj
 
-`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining JSON data structures for generating JSON schemas specifically in the context of requesting structured JSON objects from large language models (LLMs). It also provides limited support for XML schemas
+`jobj` is a Go package that provides a flexible way to create and manage JSON schema definitions. It offers an API for defining JSON data structures for generating JSON schemas specifically in the context of requesting structured JSON objects from large language models (LLMs).
 
 ## Why `jobj`?
 
-If you want to create a json schema from a struct, you can use packages like [jsonschema](https://github.com/invopop/jsonschema) that use reflection and field tags. However, using tags creates ergonomic challenges for the programmer, specifically if you ever require a long description on a field. `jobj` is designed to get around this ergonomic issue and to create json object tooling for LLM development, which requires only a subset of the json schema. 
+If you want to create a json schema from a struct, you can use packages like [jsonschema](https://github.com/invopop/jsonschema) that use reflection and field tags. However, using tags creates ergonomic challenges for the programmer, specifically if you ever require a long description on a field. `jobj` is designed to get around this ergonomic issue and to create json object tooling for LLM development, which requires only a subset of the json schema. If your json object is simple and doesn't require a long description, however, we suggest using the `jsonschema` package.
 
 ## JSON Schema Specification Coverage
 
@@ -38,7 +38,6 @@ This package implements a focused subset of the [JSON Schema Draft-07](https://j
 - Support for nested objects and arrays
 - Enum-like field constraints using `AnyOf`
 - Required/optional field specification
-- XML schema generation (limited subset)
 - Generate JSON schemas from Go function signatures via the `funcschema` subpackage
 - Validation against Go structs
 - Struct tag parsing for automated schema generation
@@ -246,17 +245,6 @@ The `funcschema` subpackage offers several options:
 - `NewSchemaFromFunc()` - Non-generic version for compatibility
 - `GetPropertiesMap()` - Convert schema to a properties map for LLM tool definitions
 
-### XML Schema Support
-
-While primarily focused on JSON Schema, `jobj` provides limited XML Schema generation via the `GetXMLSchemaString()` method:
-
-```go
-schema := NewHeadlineResponse()
-schema.UseXML = true
-xmlSchema := schema.GetXMLSchemaString()
-```
-
-XML support is limited to basic type mapping and does not implement the full XML Schema specification.
 
 ## Contributing
 

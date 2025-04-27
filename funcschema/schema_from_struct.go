@@ -50,7 +50,6 @@ func createSchemaFromType(t reflect.Type) (jobj.Schema, error) {
 		Name:        t.Name(),
 		Description: fmt.Sprintf("Schema for %s", t.Name()),
 		Fields:      make([]*jobj.Field, 0, t.NumField()),
-		UseXML:      false,
 	}
 
 	for i := 0; i < t.NumField(); i++ {

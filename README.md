@@ -171,7 +171,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/mhpenta/jobj/funcschema"
-	"github.com/mhpenta/jobj/safeunmarshall"
+	"github.com/mhpenta/jobj/safeunmarshal"
 )
 
 // Define your tool's parameter struct
@@ -196,7 +196,7 @@ func (t *SearchTool) Parameters() map[string]interface{} {
 
 // Called by the agent
 func (t *SearchTool) Execute(ctx context.Context, params json.RawMessage) (*tools.ToolResult, error) {
-    paramsStruct, err := safeunmarshall.To[SearchToolParams](params)
+    paramsStruct, err := safeunmarshal.To[SearchToolParams](params)
     if err != nil {
         // Handle error
     }

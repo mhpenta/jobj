@@ -1,4 +1,4 @@
-// Package safeunmarshall provides utilities for safely unmarshalling JSON data.
+// Package safeunmarshal provides utilities for safely unmarshalling JSON data.
 //
 // Copyright (C) 2025 mhpenta (https://github.com/mhpenta)
 //

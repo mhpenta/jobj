@@ -128,8 +128,8 @@ func TestSearchTool_ParametersV2(t *testing.T) {
 	}
 }
 
-// TestSafeUnmarshallIntegration tests the integration between funcschema and safeunmarshall packages
-func TestSafeUnmarshallIntegration(t *testing.T) {
+// TestsafeunmarshalIntegration tests the integration between funcschema and safeunmarshal packages
+func TestsafeunmarshalIntegration(t *testing.T) {
 	type ToolResult struct {
 		Result string `json:"result"`
 	}

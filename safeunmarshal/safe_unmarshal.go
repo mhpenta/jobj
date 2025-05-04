@@ -39,7 +39,7 @@ import (
 //	    // fields
 //	}
 //	jsonData := []byte(`{"field": "value"}`)
-//	result, err := safeunmarshall.To[MyStruct](jsonData)
+//	result, err := safeunmarshal.To[MyStruct](jsonData)
 //	if err != nil {
 //	    if errors.Is(err, ErrExpectedJSONArray) {
 //	        // Handle case where array was expected but not received

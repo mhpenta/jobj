@@ -25,6 +25,18 @@ func Test_repairJSON(t *testing.T) {
 		wantErr  bool
 	}{
 		{
+			name:     "Invalid json with valid json",
+			input:    `Here is a obj: {"name": "John", "age": 30}`,
+			expected: `{"name":"John","age":30}`,
+			wantErr:  false,
+		},
+		{
+			name:     "Invalid json with valid json array",
+			input:    `Here is a obj: [{"name": "John", "age": 30}, {"name": "Marc", "age": 36}]`,
+			expected: `[{"name": "John", "age": 30}, {"name": "Marc", "age": 36}]`,
+			wantErr:  false,
+		},
+		{
 			name:     "Already valid JSON",
 			input:    `{"name": "John", "age": 30}`,
 			expected: `{"name":"John","age":30}`,
@@ -578,8 +590,8 @@ func TestTo(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			name:      "Invalid JSON structure",
-			input:     `{"name": "John", "age": 30, "score": 95.5}`,
+			name:  "Invalid JSON structure",
+			input: `{"name": "John", "age": 30, "score": 95.5}`,
 			expectedOutput: SimpleStruct{
 				Name:  "John",
 				Age:   30,

@@ -130,22 +130,15 @@ func TestSearchTool_ParametersV2(t *testing.T) {
 
 // TestSafeUnmarshallIntegration tests the integration between funcschema and safeunmarshall packages
 func TestSafeUnmarshallIntegration(t *testing.T) {
-	// Define a simplified version of tool execution flow from README example
 	type ToolResult struct {
 		Result string `json:"result"`
 	}
 
-	type SearchTool struct{}
-
-	// Execute is the entry point similar to what's shown in README
 	executeFunc := func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
-		// Use safeunmarshall.To to parse the parameters
 		searchParams, err := safeunmarshall.To[SearchToolParams](params)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse parameters: %w", err)
 		}
-
-		// Normally we'd call ExecuteSearch here, but we'll just simulate the result
 		result := &ToolResult{
 			Result: fmt.Sprintf("Found results for ID:%d, Query:%s", searchParams.ID, searchParams.Query),
 		}
@@ -154,23 +147,23 @@ func TestSafeUnmarshallIntegration(t *testing.T) {
 
 	// Test with well-formed JSON
 	wellFormedJSON := []byte(`{"ID": 42, "Query": "test query"}`)
-	
+
 	// Test with JSON that needs repair (single quotes, unquoted keys)
 	needsRepairJSON := []byte(`{ID: 123, 'Query': 'another query'}`)
-	
+
 	// Execute with both inputs
 	ctx := context.Background()
-	
+
 	// Test with well-formed JSON
 	result1, err := executeFunc(ctx, wellFormedJSON)
 	assert.NoError(t, err)
 	assert.Equal(t, "Found results for ID:42, Query:test query", result1.Result)
-	
+
 	// Test with JSON that needs repair
 	result2, err := executeFunc(ctx, needsRepairJSON)
 	assert.NoError(t, err)
 	assert.Equal(t, "Found results for ID:123, Query:another query", result2.Result)
-	
+
 	// For SafeSchemaFromFunc with JSON parameters, we need to use a function with a struct parameter
 	// rather than json.RawMessage
 	searchFunc := func(ctx context.Context, params SearchToolParams) (*ToolResult, error) {
@@ -178,21 +171,20 @@ func TestSafeUnmarshallIntegration(t *testing.T) {
 			Result: fmt.Sprintf("Found results for ID:%d, Query:%s", params.ID, params.Query),
 		}, nil
 	}
-	
+
 	// Verify schema generation works correctly
 	schema, err := SafeSchemaFromFunc(searchFunc)
 	assert.NoError(t, err)
 	assert.NotNil(t, schema)
-	
+
 	// Verify properties exist in the schema
 	properties, ok := schema["properties"].(map[string]interface{})
 	assert.True(t, ok)
-	
-	// Verify ID and Query fields exist in properties
+
 	idField, ok := properties["ID"].(map[string]string)
 	assert.True(t, ok)
 	assert.Equal(t, "integer", idField["type"])
-	
+
 	queryField, ok := properties["Query"].(map[string]string)
 	assert.True(t, ok)
 	assert.Equal(t, "string", queryField["type"])

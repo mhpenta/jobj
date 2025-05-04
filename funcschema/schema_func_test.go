@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/mhpenta/jobj/safeunmarshall"
+	"github.com/mhpenta/jobj/safeunmarshal"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

@@ -1,5 +1,5 @@
 // Package safeunmarshall provides utilities for safely unmarshalling JSON data.
-package safeunmarshall
+package safeunmarshal
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ import (
 // - Single quotes instead of double quotes
 // - Unquoted values that should be strings
 //
-// Note: This function tries to repair JSON even in cases where significant 
+// Note: This function tries to repair JSON even in cases where significant
 // modifications are needed. In some cases, the returned JSON may be a minimal
 // valid structure (like "{}" or "[]") if the original cannot be properly repaired.
 func repairJSON(src string) (string, error) {

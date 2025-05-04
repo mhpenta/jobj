@@ -135,7 +135,7 @@ func TestSafeUnmarshallIntegration(t *testing.T) {
 	}
 
 	executeFunc := func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
-		searchParams, err := safeunmarshall.To[SearchToolParams](params)
+		searchParams, err := safeunmarshal.To[SearchToolParams](params)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse parameters: %w", err)
 		}

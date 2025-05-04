@@ -1,5 +1,5 @@
-// Package safeunmarshall provides utilities for safely unmarshalling JSON data.
-package safeunmarshall
+// Package safeunmarshal provides utilities for safely unmarshalling JSON data.
+package safeunmarshal
 
 import (
 	"bytes"

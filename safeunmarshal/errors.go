@@ -1,4 +1,4 @@
-package safeunmarshall
+package safeunmarshal
 
 import "errors"
 

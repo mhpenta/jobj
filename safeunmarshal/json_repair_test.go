@@ -4,7 +4,7 @@
 //
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
-package safeunmarshall
+package safeunmarshal
 
 // These tests are adapted from the Python JSON repair library tests
 // to ensure our MIT implementation handles a wide range of edge cases.

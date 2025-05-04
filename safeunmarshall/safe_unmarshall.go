@@ -48,6 +48,7 @@ import (
 //	    }
 //	}
 func To[T any](raw []byte) (T, error) {
+
 	data := prepareJSONForUnmarshalling(raw)
 	data = bytes.ReplaceAll(data, []byte("\n"), []byte(""))
 

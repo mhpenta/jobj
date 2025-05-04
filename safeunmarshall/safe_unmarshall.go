@@ -2,11 +2,11 @@
 package safeunmarshall
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"reflect"
-	"strings"
 )
 
 // To attempts to unmarshal a JSON byte slice into a value of type T.
@@ -38,7 +38,7 @@ import (
 //	type MyStruct struct {
 //	    // fields
 //	}
-//	jsonData := []byte(`{"field": "value"}`) 
+//	jsonData := []byte(`{"field": "value"}`)
 //	result, err := safeunmarshall.To[MyStruct](jsonData)
 //	if err != nil {
 //	    if errors.Is(err, ErrExpectedJSONArray) {
@@ -48,10 +48,8 @@ import (
 //	    }
 //	}
 func To[T any](raw []byte) (T, error) {
-	data := prepareStringWithJsonForUnmarshalling(string(raw))
-
-	// remove newlines - unnecessary for parsing and can cause issues with multi-line strings
-	data = strings.ReplaceAll(data, "\n", "")
+	data := prepareJSONForUnmarshalling(raw)
+	data = bytes.ReplaceAll(data, []byte("\n"), []byte(""))
 
 	if len(data) == 0 {
 		var zero T
@@ -59,7 +57,7 @@ func To[T any](raw []byte) (T, error) {
 	}
 
 	var response T
-	err := json.Unmarshal([]byte(data), &response)
+	err := json.Unmarshal(data, &response)
 	if err != nil {
 
 		var temp T
@@ -71,7 +69,7 @@ func To[T any](raw []byte) (T, error) {
 			return zero, fmt.Errorf("%w: got %s", ErrExpectedJSONArray, data)
 		}
 
-		repairedData, repairErr := repairJSON(data)
+		repairedData, repairErr := repairJSON(string(data))
 		if repairErr != nil {
 			var zero T
 			return zero, fmt.Errorf("failed to repair JSON: %w", repairErr)
@@ -91,37 +89,35 @@ func To[T any](raw []byte) (T, error) {
 	return response, nil
 }
 
-// isJSONArray checks if the input string represents a JSON array.
+// isJSONArray checks if the input byte slice represents a JSON array.
 //
-// This function scans the input string, skipping any leading whitespace,
+// This function scans the input byte slice, skipping any leading whitespace,
 // to determine if it starts with an opening square bracket '[', which
 // indicates the beginning of a JSON array.
 //
 // Parameters:
-//   - data: A string containing the JSON data to be checked.
+//   - data: A byte slice containing the JSON data to be checked.
 //
 // Returns:
 //   - bool: true if the input represents a JSON array, false otherwise.
 //
 // Note: This function only checks the first non-whitespace character
 // and does not validate the entire JSON structure.
-func isJSONArray(data string) bool {
-	for _, c := range data {
-		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+func isJSONArray(data []byte) bool {
+	for _, b := range data {
+		if b == ' ' || b == '\t' || b == '\n' || b == '\r' {
 			continue
 		}
-		return c == '['
+		return b == '['
 	}
 	return false
 }
 
-// prepareStringWithJsonForUnmarshalling takes a string which may contain a JSON object and returns the string
-// with the left and right trimmed to the outermost brackets.
-func prepareStringWithJsonForUnmarshalling(data string) string {
-	trimmedData := strings.TrimSpace(data)
+func prepareJSONForUnmarshalling(data []byte) []byte {
+	trimmedData := bytes.TrimSpace(data)
 
 	if len(trimmedData) == 0 {
-		return ""
+		return nil
 	}
 
 	// Check if the first character is '{' and the last character is '}'
@@ -146,7 +142,7 @@ func prepareStringWithJsonForUnmarshalling(data string) string {
 			}
 		}
 
-		slog.Error("Error parsing JSON from string", "data", data)
-		return ""
+		slog.Error("Error parsing JSON from byte slice", "data", string(data))
+		return nil
 	}
 }

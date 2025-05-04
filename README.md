@@ -55,7 +55,6 @@ package main
 
 import (
 	"github.com/mhpenta/jobj"
-	"github.com/mhpenta/jobj/safeunmarshall"
 )
 
 type HeadlinesResponse struct {

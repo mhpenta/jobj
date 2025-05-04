@@ -9,14 +9,14 @@ import (
 	"strings"
 )
 
-// To attempts to unmarshal a JSON string into a value of type T.
+// To attempts to unmarshal a JSON byte slice into a value of type T.
 //
 // This function can handle various types, including arrays and slices. It first attempts
-// to unmarshal the provided JSON string directly. If that fails, it tries to repair the JSON before
+// to unmarshal the provided JSON directly. If that fails, it tries to repair the JSON before
 // attempting to unmarshal again.
 //
 // Parameters:
-//   - data: A string containing the JSON data to be parsed.
+//   - raw: A byte slice containing the JSON data to be parsed.
 //
 // Returns:
 //   - T: The unmarshalled value of type T.
@@ -25,7 +25,7 @@ import (
 //     target type is an array or slice but the input is not a JSON array.
 //
 // The function uses the following process:
-//  1. Prepares the JSON string for unmarshalling.
+//  1. Prepares the JSON for unmarshalling.
 //  2. Checks if the input is empty.
 //  3. Determines if the target type is an array or slice.
 //  4. Attempts to unmarshal the JSON into the value.
@@ -38,7 +38,8 @@ import (
 //	type MyStruct struct {
 //	    // fields
 //	}
-//	result, err := safeunmarshall.To[MyStruct](jsonString)
+//	jsonData := []byte(`{"field": "value"}`) 
+//	result, err := safeunmarshall.To[MyStruct](jsonData)
 //	if err != nil {
 //	    if errors.Is(err, ErrExpectedJSONArray) {
 //	        // Handle case where array was expected but not received

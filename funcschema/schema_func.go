@@ -6,6 +6,7 @@ import (
 	"github.com/mhpenta/jobj"
 	"log/slog"
 	"reflect"
+	"strings"
 )
 
 // NewSchemaFromFuncV2 creates a jobj.Schema from a function's second parameter type.
@@ -130,18 +131,33 @@ func NewSchemaFromFunc(function interface{}) (jobj.Schema, error) {
 func createFieldFromStructField(field reflect.StructField) *jobj.Field {
 	var jobjField *jobj.Field
 
+	// Get the field name from JSON tag if present, otherwise use the Go field name
+	fieldName := field.Name
+	if jsonTag, ok := field.Tag.Lookup("json"); ok {
+		// Parse the json tag to get the field name (before any comma)
+		if commaIdx := strings.Index(jsonTag, ","); commaIdx != -1 {
+			fieldName = jsonTag[:commaIdx]
+		} else {
+			fieldName = jsonTag
+		}
+		// Skip field if json tag is "-"
+		if fieldName == "-" {
+			return nil
+		}
+	}
+
 	switch field.Type.Kind() {
 	case reflect.String:
-		jobjField = jobj.Text(field.Name)
+		jobjField = jobj.Text(fieldName)
 	case reflect.Bool:
-		jobjField = jobj.Bool(field.Name)
+		jobjField = jobj.Bool(fieldName)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		jobjField = jobj.Int(field.Name)
+		jobjField = jobj.Int(fieldName)
 	case reflect.Float32, reflect.Float64:
-		jobjField = jobj.Float(field.Name)
+		jobjField = jobj.Float(fieldName)
 	case reflect.Struct:
 		if field.Type.String() == "time.Time" {
-			jobjField = jobj.Date(field.Name)
+			jobjField = jobj.Date(fieldName)
 		} else {
 			subFields := make([]*jobj.Field, 0)
 			for i := 0; i < field.Type.NumField(); i++ {
@@ -150,7 +166,7 @@ func createFieldFromStructField(field reflect.StructField) *jobj.Field {
 					subFields = append(subFields, subField)
 				}
 			}
-			jobjField = jobj.Object(field.Name, subFields)
+			jobjField = jobj.Object(fieldName, subFields)
 		}
 	case reflect.Slice, reflect.Array:
 		elemType := field.Type.Elem()
@@ -162,7 +178,7 @@ func createFieldFromStructField(field reflect.StructField) *jobj.Field {
 					subFields = append(subFields, subField)
 				}
 			}
-			jobjField = jobj.Array(field.Name, subFields)
+			jobjField = jobj.Array(fieldName, subFields)
 		}
 	default:
 		slog.Warn("Unsupported field type", "field", field.Name, "type", field.Type.Kind())
@@ -170,7 +186,10 @@ func createFieldFromStructField(field reflect.StructField) *jobj.Field {
 	}
 
 	if jobjField != nil {
+		// Support both "desc" and "description" tags, with "desc" taking precedence
 		if desc, ok := field.Tag.Lookup("desc"); ok {
+			jobjField.Desc(desc)
+		} else if desc, ok := field.Tag.Lookup("description"); ok {
 			jobjField.Desc(desc)
 		}
 

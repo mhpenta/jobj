@@ -22,6 +22,10 @@ import (
 // This function is a convenient alternative to calling NewSchemaFromFuncV2 and
 // GetPropertiesMap separately while maintaining compile-time type checking.
 //
+// Since SafeSchemaFromFunc uses jobj, we use a description field tag of "desc" for
+// field descriptions. Both "desc" and "description" tags are supported and treated
+// equivalently for convenience.
+//
 // Internally, we use this to transform Go functions into "Tools" for LLM Agents.
 func SafeSchemaFromFunc[T any, R any](function func(context.Context, T) (R, error)) (map[string]interface{}, error) {
 	schema, err := NewSchemaFromFuncV2(function)

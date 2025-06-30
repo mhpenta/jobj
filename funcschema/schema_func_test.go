@@ -189,3 +189,89 @@ func TestSafeunmarshalIntegration(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "string", queryField["type"])
 }
+
+// TestJSONTagNames tests that JSON tag names are properly used in schema generation
+func TestJSONTagNames(t *testing.T) {
+	type XBRLToolParams struct {
+		// Operation specifies what action to perform
+		Operation string `json:"operation" desc:"Operation to perform" required:"true"`
+
+		// CIK is the company CIK number
+		CIK string `json:"cik,omitempty" desc:"Company CIK number"`
+
+		// AccessionNumber is the SEC accession number
+		AccessionNumber string `json:"accession_number,omitempty" desc:"SEC accession number"`
+
+		// DocumentType filters documents by type
+		DocumentType string `json:"document_type,omitempty" desc:"Filter documents by type"`
+
+		// ReportNumber is the report/table number
+		ReportNumber int `json:"report_number,omitempty" desc:"Report/table number"`
+
+		// IgnoredField should not appear in schema
+		IgnoredField string `json:"-"`
+
+		// NoJSONTag should use the Go field name
+		NoJSONTag string `desc:"Field without JSON tag"`
+	}
+
+	handler := func(ctx context.Context, params XBRLToolParams) (string, error) {
+		return "processed", nil
+	}
+
+	// Test SafeSchemaFromFunc
+	schema, err := SafeSchemaFromFunc(handler)
+	assert.NoError(t, err)
+	assert.NotNil(t, schema)
+
+	// Verify the schema structure
+	assert.Equal(t, "object", schema["type"])
+	assert.Equal(t, false, schema["additionalProperties"])
+
+	properties, ok := schema["properties"].(map[string]interface{})
+	assert.True(t, ok, "properties should be a map")
+
+	// Check that JSON tag names are used
+	_, hasOperation := properties["operation"]
+	assert.True(t, hasOperation, "should have 'operation' field (from json tag)")
+
+	_, hasCIK := properties["cik"]
+	assert.True(t, hasCIK, "should have 'cik' field (from json tag)")
+
+	_, hasAccessionNumber := properties["accession_number"]
+	assert.True(t, hasAccessionNumber, "should have 'accession_number' field (from json tag)")
+
+	_, hasDocumentType := properties["document_type"]
+	assert.True(t, hasDocumentType, "should have 'document_type' field (from json tag)")
+
+	_, hasReportNumber := properties["report_number"]
+	assert.True(t, hasReportNumber, "should have 'report_number' field (from json tag)")
+
+	// Check that json:"-" field is excluded
+	_, hasIgnored := properties["IgnoredField"]
+	assert.False(t, hasIgnored, "should not have 'IgnoredField' (json:\"-\")")
+
+	// Check that field without JSON tag uses Go field name
+	_, hasNoJSONTag := properties["NoJSONTag"]
+	assert.True(t, hasNoJSONTag, "should have 'NoJSONTag' field (no json tag)")
+
+	// Verify field types and descriptions
+	operationField := properties["operation"].(map[string]string)
+	assert.Equal(t, "string", operationField["type"])
+	assert.Equal(t, "Operation to perform", operationField["description"])
+
+	cikField := properties["cik"].(map[string]string)
+	assert.Equal(t, "string", cikField["type"])
+	assert.Equal(t, "Company CIK number", cikField["description"])
+
+	reportNumberField := properties["report_number"].(map[string]string)
+	assert.Equal(t, "integer", reportNumberField["type"])
+	assert.Equal(t, "Report/table number", reportNumberField["description"])
+
+	// Check required fields
+	required, ok := schema["required"].([]string)
+	assert.True(t, ok)
+	assert.Contains(t, required, "operation", "operation should be required")
+	assert.NotContains(t, required, "cik", "cik should not be required")
+	assert.NotContains(t, required, "accession_number", "accession_number should not be required")
+}

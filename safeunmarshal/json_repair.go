@@ -9,6 +9,25 @@ import (
 	"strings"
 )
 
+var (
+	ellipsisRe             = regexp.MustCompile(`\s*\.\.\.`)
+	arrayExtractRe         = regexp.MustCompile(`\[(.*?)(?:\]|$)`)
+	trailingCommaArrayRe   = regexp.MustCompile(`\[(.*?),\s*(?:\]|$)`)
+	quotedStringsRe        = regexp.MustCompile(`\[\s*"([^"]+)"\s+"([^"]+)"\s+"([^"]+)"\s+(\d+)`)
+	apostropheRe           = regexp.MustCompile(`\\'t`)
+	arrayMissingCommaRe    = regexp.MustCompile(`("[^"]*"|\d+|\w+)\s+("[^"]*"|\d+|\w+)`)
+	keyValPatternRe        = regexp.MustCompile(`"([^"]+)"\s*:\s*("([^"]*)"|\d+|true|false|null)`)
+	boolNullRe             = regexp.MustCompile(`(?i):\s*(true|false|null)(\s*[,}]|\s*$)`)
+	trueCaseRe             = regexp.MustCompile(`(?i)true`)
+	falseCaseRe            = regexp.MustCompile(`(?i)false`)
+	nullCaseRe             = regexp.MustCompile(`(?i)null`)
+	unquotedValueRe        = regexp.MustCompile(`(:\s*)([a-zA-Z][a-zA-Z0-9_]*)(\s*[,}]|\s*$)`)
+	unquotedValueEndRe     = regexp.MustCompile(`:\s*([a-zA-Z][a-zA-Z0-9_]*)$`)
+	unquotedKeyRe          = regexp.MustCompile(`([{,]\s*)([a-zA-Z0-9_]+)(\s*:)`)
+	trailingCommaBraceRe   = regexp.MustCompile(`,\s*}`)
+	trailingCommaBracketRe = regexp.MustCompile(`,\s*]`)
+)
+
 // repairJSON attempts to fix common JSON syntax errors and returns a valid JSON string.
 // This function handles several common JSON formatting issues including:
 // - Missing quotes around keys and string values
@@ -70,9 +89,8 @@ func repairJSON(src string) (string, error) {
 	}
 
 	if strings.HasPrefix(src, "[") && strings.Contains(src, "...") {
-		src = regexp.MustCompile(`\s*\.\.\.`).ReplaceAllString(src, "")
-		re := regexp.MustCompile(`\[(.*?)(?:\]|$)`)
-		matches := re.FindStringSubmatch(src)
+		src = ellipsisRe.ReplaceAllString(src, "")
+		matches := arrayExtractRe.FindStringSubmatch(src)
 		if len(matches) > 1 {
 			elements := strings.Split(matches[1], ",")
 			var cleanElements []string
@@ -89,21 +107,18 @@ func repairJSON(src string) (string, error) {
 	}
 
 	if strings.HasPrefix(src, "[") && strings.HasSuffix(strings.TrimSpace(src), ",") {
-		re := regexp.MustCompile(`\[(.*?),\s*(?:\]|$)`)
-		matches := re.FindStringSubmatch(src)
+		matches := trailingCommaArrayRe.FindStringSubmatch(src)
 		if len(matches) > 1 {
 			return "[" + matches[1] + "]", nil
 		}
 	}
 
 	if strings.HasPrefix(src, "[\"") || strings.HasPrefix(src, "['") {
-		re := regexp.MustCompile(`\[\s*"([^"]+)"\s+"([^"]+)"\s+"([^"]+)"\s+(\d+)`)
-		if re.MatchString(src) {
+		if quotedStringsRe.MatchString(src) {
 			return "[\"a\",\"b\",\"c\",1]", nil
 		}
 	}
 
-	apostropheRe := regexp.MustCompile(`\\'t`)
 	if apostropheRe.MatchString(src) {
 		src = apostropheRe.ReplaceAllString(src, "'t")
 	}
@@ -122,12 +137,11 @@ func repairJSON(src string) (string, error) {
 	repaired = removeTrailingCommas(repaired)
 	repaired = balanceBrackets(repaired)
 	if strings.Contains(repaired, "...") {
-		repaired = regexp.MustCompile(`\s*\.\.\.`).ReplaceAllString(repaired, "")
+		repaired = ellipsisRe.ReplaceAllString(repaired, "")
 	}
 
 	if strings.HasPrefix(repaired, "[") {
-		re := regexp.MustCompile(`("[^"]*"|\d+|\w+)\s+("[^"]*"|\d+|\w+)`)
-		repaired = re.ReplaceAllString(repaired, "$1,$2")
+		repaired = arrayMissingCommaRe.ReplaceAllString(repaired, "$1,$2")
 	}
 
 	if json.Valid([]byte(repaired)) {
@@ -143,8 +157,7 @@ func repairJSON(src string) (string, error) {
 	if !json.Valid([]byte(repaired)) && strings.HasPrefix(repaired, "{") &&
 		(strings.Count(repaired, "{") > strings.Count(repaired, "}") ||
 			strings.Count(repaired, "[") > strings.Count(repaired, "]")) {
-		keyValPattern := regexp.MustCompile(`"([^"]+)"\s*:\s*("([^"]*)"|\d+|true|false|null)`)
-		matches := keyValPattern.FindAllStringSubmatch(repaired, -1)
+		matches := keyValPatternRe.FindAllStringSubmatch(repaired, -1)
 
 		if len(matches) > 0 {
 			result := "{"
@@ -228,20 +241,17 @@ func replaceQuotes(s string) string {
 func fixUnquotedValues(s string) string {
 	// First pass - handle boolean and null values with case insensitivity
 	// Replace TRUE/FALSE/Null with lowercase versions
-	re := regexp.MustCompile(`(?i):\s*(true|false|null)(\s*[,}]|\s*$)`)
-	result := re.ReplaceAllStringFunc(s, func(match string) string {
+	result := boolNullRe.ReplaceAllStringFunc(s, func(match string) string {
 		matchLower := strings.ToLower(match)
 		if strings.Contains(matchLower, "true") {
-			return regexp.MustCompile(`(?i)true`).ReplaceAllString(match, "true")
+			return trueCaseRe.ReplaceAllString(match, "true")
 		} else if strings.Contains(matchLower, "false") {
-			return regexp.MustCompile(`(?i)false`).ReplaceAllString(match, "false")
+			return falseCaseRe.ReplaceAllString(match, "false")
 		} else if strings.Contains(matchLower, "null") {
-			return regexp.MustCompile(`(?i)null`).ReplaceAllString(match, "null")
+			return nullCaseRe.ReplaceAllString(match, "null")
 		}
 		return match
 	})
-
-	re2 := regexp.MustCompile(`(:\s*)([a-zA-Z][a-zA-Z0-9_]*)(\s*[,}]|\s*$)`)
 
 	process := func(match string) string {
 		matchLower := strings.ToLower(match)
@@ -251,7 +261,7 @@ func fixUnquotedValues(s string) string {
 			return match
 		}
 
-		parts := re2.FindStringSubmatch(match)
+		parts := unquotedValueRe.FindStringSubmatch(match)
 		if len(parts) >= 4 {
 			return parts[1] + "\"" + parts[2] + "\"" + parts[3]
 		}
@@ -259,27 +269,22 @@ func fixUnquotedValues(s string) string {
 		return match
 	}
 
-	result = re2.ReplaceAllStringFunc(result, process)
+	result = unquotedValueRe.ReplaceAllStringFunc(result, process)
 
-	unquotedValueRe := regexp.MustCompile(`:\s*([a-zA-Z][a-zA-Z0-9_]*)$`)
-	result = unquotedValueRe.ReplaceAllString(result, ": \"$1\"")
+	result = unquotedValueEndRe.ReplaceAllString(result, ": \"$1\"")
 
 	return result
 }
 
 // fixUnquotedKeys adds quotes around keys in JSON objects that are missing them.
 func fixUnquotedKeys(s string) string {
-	re := regexp.MustCompile(`([{,]\s*)([a-zA-Z0-9_]+)(\s*:)`)
-	return re.ReplaceAllString(s, `${1}"${2}"${3}`)
+	return unquotedKeyRe.ReplaceAllString(s, `${1}"${2}"${3}`)
 }
 
 // removeTrailingCommas removes trailing commas in arrays and objects.
 func removeTrailingCommas(s string) string {
-	re1 := regexp.MustCompile(`,\s*}`)
-	s = re1.ReplaceAllString(s, "}")
-
-	re2 := regexp.MustCompile(`,\s*]`)
-	return re2.ReplaceAllString(s, "]")
+	s = trailingCommaBraceRe.ReplaceAllString(s, "}")
+	return trailingCommaBracketRe.ReplaceAllString(s, "]")
 }
 
 // balanceBrackets ensures all brackets and braces are properly balanced.

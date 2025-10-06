@@ -38,41 +38,43 @@ func (d *JsonDateTime) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-const RFC3339Basic = "2006-01-02T15:04:05Z"
+const (
+	RFC3339Basic       = "2006-01-02T15:04:05Z"
+	RFC3339WithOffset  = "2006-01-02T15:04:05-07:00"
+	DateTimeWithSpace  = "2006-01-02 15:04:05"
+)
+
+var timeFormats = []string{
+	RFC3339WithOffset,
+	time.RFC3339,
+	RFC3339Basic,
+	time.RFC3339Nano,
+	DateTimeWithSpace,
+	time.DateOnly,
+	time.RFC1123Z,
+	time.RFC1123,
+	time.RFC822Z,
+	time.RFC822,
+	time.RubyDate,
+	time.RFC850,
+	time.Layout,
+	time.ANSIC,
+	time.Stamp,
+	time.StampMilli,
+	time.StampMicro,
+	time.StampNano,
+}
 
 // parsePublishedTime attempts to parse a string representing a published time using various time formats. Typically
 // used to parse feeds.
 func parsePublishedTime(published string) (time.Time, error) {
-	formats := []string{
-		"2006-01-02T15:04:05-07:00",
-		time.RFC3339,
-		RFC3339Basic,
-		time.RFC3339Nano,
-		"2006-01-02 15:04:05",
-		time.DateOnly,
-		time.RFC1123Z,
-		time.RFC1123,
-		time.RFC822Z,
-		time.RFC822,
-		time.RubyDate,
-		time.RFC850,
-		time.Layout,
-		time.ANSIC,
-		time.Stamp,
-		time.StampMilli,
-		time.StampMicro,
-		time.StampNano,
-	}
-
 	var err error
 	var publishedTime time.Time
-
-	for _, format := range formats {
+	for _, format := range timeFormats {
 		publishedTime, err = time.Parse(format, published)
 		if err == nil {
 			return publishedTime, nil
 		}
 	}
-
 	return time.Time{}, fmt.Errorf("failed to parse published time: %v", err)
 }

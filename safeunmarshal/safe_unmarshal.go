@@ -48,12 +48,12 @@ import (
 //	    }
 //	}
 func To[T any](raw []byte) (T, error) {
+	var zero T // original zero value to return in case of error
 
 	data := prepareJSONForUnmarshalling(raw)
 	data = bytes.ReplaceAll(data, []byte("\n"), []byte(""))
 
 	if len(data) == 0 {
-		var zero T
 		return zero, fmt.Errorf("empty input string")
 	}
 
@@ -61,29 +61,24 @@ func To[T any](raw []byte) (T, error) {
 	err := json.Unmarshal(data, &response)
 	if err != nil {
 
-		var temp T
-		valueType := reflect.ValueOf(temp).Type()
+		valueType := reflect.TypeOf((*T)(nil)).Elem()
 		isArray := valueType.Kind() == reflect.Array || valueType.Kind() == reflect.Slice
 
 		if isArray && !isJSONArray(data) {
-			var zero T
 			return zero, fmt.Errorf("%w: got %s", ErrExpectedJSONArray, data)
 		}
 
 		repairedData, repairErr := repairJSON(string(data))
 		if repairErr != nil {
-			var zero T
 			return zero, fmt.Errorf("failed to repair JSON: %w", repairErr)
 		}
 
 		if repairedData == "" {
-			var zero T
 			return zero, fmt.Errorf("JSON repair resulted in empty string")
 		}
 
 		err = json.Unmarshal([]byte(repairedData), &response)
 		if err != nil {
-			var zero T
 			return zero, fmt.Errorf("failed to parse repaired JSON into struct: %w", err)
 		}
 	}

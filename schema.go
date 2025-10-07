@@ -83,65 +83,81 @@ func (r *Schema) FieldsJson() map[string]interface{} {
 			continue
 		}
 
-		if field.ValueType == "array" && field.SubFields != nil {
-			arrayFieldProperties := make(map[string]interface{})
-			requiredFields := []string{}
-
-			for _, subField := range field.SubFields {
-				if subField.ValueRequired {
-					requiredFields = append(requiredFields, subField.ValueName)
+		if field.ValueType == "array" {
+			// Handle arrays of primitives (when ArrayItemType is set)
+			if field.ArrayItemType != "" {
+				fieldProps := map[string]interface{}{
+					"type":        field.ValueType,
+					"description": field.ValueDescription,
+					"items": map[string]interface{}{
+						"type": string(field.ArrayItemType),
+					},
 				}
+				properties[field.ValueName] = fieldProps
+				continue
 			}
 
-			for _, subField := range field.SubFields {
-				if subField.ValueAnyOf != nil {
-					anyOf := make([]map[string]interface{}, 0, len(subField.ValueAnyOf))
-					for _, enum := range subField.ValueAnyOf {
-						anyOf = append(anyOf, map[string]interface{}{
-							"const":       enum.Const,
-							"description": enum.Description,
-						})
-					}
+			// Handle arrays of objects (when SubFields is set)
+			if field.SubFields != nil {
+				arrayFieldProperties := make(map[string]interface{})
+				requiredFields := []string{}
 
-					fieldProps := map[string]interface{}{
-						"anyOf": anyOf,
+				for _, subField := range field.SubFields {
+					if subField.ValueRequired {
+						requiredFields = append(requiredFields, subField.ValueName)
 					}
-					if subField.ValueDescription != "" {
-						fieldProps["description"] = subField.ValueDescription
-					}
-
-					arrayFieldProperties[subField.ValueName] = fieldProps
-					continue
 				}
 
-				if subField.ValueType == "object" && subField.SubFields != nil {
-					objectFieldProperties := processObjectFields(subField.SubFields)
-					arrayFieldProperties[subField.ValueName] = map[string]interface{}{
-						"type":        subField.ValueType,
+				for _, subField := range field.SubFields {
+					if subField.ValueAnyOf != nil {
+						anyOf := make([]map[string]interface{}, 0, len(subField.ValueAnyOf))
+						for _, enum := range subField.ValueAnyOf {
+							anyOf = append(anyOf, map[string]interface{}{
+								"const":       enum.Const,
+								"description": enum.Description,
+							})
+						}
+
+						fieldProps := map[string]interface{}{
+							"anyOf": anyOf,
+						}
+						if subField.ValueDescription != "" {
+							fieldProps["description"] = subField.ValueDescription
+						}
+
+						arrayFieldProperties[subField.ValueName] = fieldProps
+						continue
+					}
+
+					if subField.ValueType == "object" && subField.SubFields != nil {
+						objectFieldProperties := processObjectFields(subField.SubFields)
+						arrayFieldProperties[subField.ValueName] = map[string]interface{}{
+							"type":        subField.ValueType,
+							"description": subField.ValueDescription,
+							"properties":  objectFieldProperties,
+							"required":    subField.getRequiredFields(),
+						}
+						continue
+					}
+
+					arrayFieldProperties[subField.ValueName] = map[string]string{
+						"type":        string(subField.ValueType),
 						"description": subField.ValueDescription,
-						"properties":  objectFieldProperties,
-						"required":    subField.getRequiredFields(),
 					}
-					continue
 				}
 
-				arrayFieldProperties[subField.ValueName] = map[string]string{
-					"type":        string(subField.ValueType),
-					"description": subField.ValueDescription,
+				properties[field.ValueName] = map[string]interface{}{
+					"type":                 field.ValueType,
+					"description":          field.ValueDescription,
+					"additionalProperties": field.AdditionalProperties,
+					"items": map[string]interface{}{
+						"type":       "object",
+						"properties": arrayFieldProperties,
+						"required":   requiredFields,
+					},
 				}
+				continue
 			}
-
-			properties[field.ValueName] = map[string]interface{}{
-				"type":                 field.ValueType,
-				"description":          field.ValueDescription,
-				"additionalProperties": field.AdditionalProperties,
-				"items": map[string]interface{}{
-					"type":       "object",
-					"properties": arrayFieldProperties,
-					"required":   requiredFields,
-				},
-			}
-			continue
 		}
 
 		if field.ValueType == "object" {
@@ -316,9 +332,20 @@ func processObjectFields(fields []*Field) map[string]interface{} {
 			continue
 		}
 
-		objectFieldProperties[field.ValueName] = map[string]string{
-			"type":        string(field.ValueType),
-			"description": field.ValueDescription,
+		// Handle arrays with primitive item types
+		if field.ValueType == TypeArray && field.ArrayItemType != "" {
+			objectFieldProperties[field.ValueName] = map[string]interface{}{
+				"type":        string(field.ValueType),
+				"description": field.ValueDescription,
+				"items": map[string]interface{}{
+					"type": string(field.ArrayItemType),
+				},
+			}
+		} else {
+			objectFieldProperties[field.ValueName] = map[string]string{
+				"type":        string(field.ValueType),
+				"description": field.ValueDescription,
+			}
 		}
 	}
 	return objectFieldProperties

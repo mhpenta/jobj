@@ -65,6 +65,100 @@ func NewSchemaFromFuncV2[T any, R any](function func(context.Context, T) (R, err
 	return schema, nil
 }
 
+// NewSchemasFromFunc creates jobj.Schemas from a function's input and output types.
+// Uses generics to enforce the function signature at compile time.
+//
+// Type parameters:
+//   - T: The type of the second parameter (must be a struct type)
+//   - R: The return type of the function (must be a struct type)
+//
+// The function accepts handlers with the signature:
+//
+//	func(context.Context, T) (R, error)
+//
+// Returns input and output Schemas describing the structure of types T and R respectively,
+// and any error encountered. An error is returned if T or R are not struct types, or if
+// they have no exported fields of supported types.
+func NewSchemasFromFunc[T any, R any](function func(context.Context, T) (R, error)) (input jobj.Schema, output jobj.Schema, err error) {
+	// Create input schema from T
+	var zeroInput T
+	inputType := reflect.TypeOf(zeroInput)
+
+	if inputType.Kind() == reflect.Ptr {
+		inputType = inputType.Elem()
+	}
+
+	if inputType.Kind() != reflect.Struct {
+		return jobj.Schema{}, jobj.Schema{}, fmt.Errorf("input parameter type must be a struct")
+	}
+
+	input = jobj.Schema{
+		Name:        inputType.Name(),
+		Description: fmt.Sprintf("Input schema for %s function parameters", inputType.Name()),
+		Fields:      make([]*jobj.Field, 0),
+	}
+
+	for i := 0; i < inputType.NumField(); i++ {
+		field := inputType.Field(i)
+
+		if !field.IsExported() {
+			continue
+		}
+
+		jobjField := createFieldFromStructField(field)
+		if jobjField != nil {
+			input.Fields = append(input.Fields, jobjField)
+		}
+	}
+
+	if len(input.Fields) == 0 {
+		return jobj.Schema{}, jobj.Schema{}, fmt.Errorf(
+			"no valid fields found in input struct %s. Ensure fields are exported and of supported types",
+			inputType.Name(),
+		)
+	}
+
+	// Create output schema from R
+	var zeroOutput R
+	outputType := reflect.TypeOf(zeroOutput)
+
+	if outputType.Kind() == reflect.Ptr {
+		outputType = outputType.Elem()
+	}
+
+	if outputType.Kind() != reflect.Struct {
+		return jobj.Schema{}, jobj.Schema{}, fmt.Errorf("output return type must be a struct")
+	}
+
+	output = jobj.Schema{
+		Name:        outputType.Name(),
+		Description: fmt.Sprintf("Output schema for %s function return value", outputType.Name()),
+		Fields:      make([]*jobj.Field, 0),
+	}
+
+	for i := 0; i < outputType.NumField(); i++ {
+		field := outputType.Field(i)
+
+		if !field.IsExported() {
+			continue
+		}
+
+		jobjField := createFieldFromStructField(field)
+		if jobjField != nil {
+			output.Fields = append(output.Fields, jobjField)
+		}
+	}
+
+	if len(output.Fields) == 0 {
+		return jobj.Schema{}, jobj.Schema{}, fmt.Errorf(
+			"no valid fields found in output struct %s. Ensure fields are exported and of supported types",
+			outputType.Name(),
+		)
+	}
+
+	return input, output, nil
+}
+
 // NewSchemaFromFunc creates a Schema from a function's second parameter type.
 // Returns an error if the function doesn't match signature func(context.Context, any)
 // or if the second parameter is not a struct type.
@@ -171,6 +265,7 @@ func createFieldFromStructField(field reflect.StructField) *jobj.Field {
 	case reflect.Slice, reflect.Array:
 		elemType := field.Type.Elem()
 		if elemType.Kind() == reflect.Struct {
+			// Array of structs
 			subFields := make([]*jobj.Field, 0)
 			for i := 0; i < elemType.NumField(); i++ {
 				subField := createFieldFromStructField(elemType.Field(i))
@@ -179,6 +274,23 @@ func createFieldFromStructField(field reflect.StructField) *jobj.Field {
 				}
 			}
 			jobjField = jobj.Array(fieldName, subFields)
+		} else {
+			// Array of primitives - use ArrayOf with the appropriate item type
+			var itemType jobj.DataType
+			switch elemType.Kind() {
+			case reflect.String:
+				itemType = jobj.TypeString
+			case reflect.Bool:
+				itemType = jobj.TypeBoolean
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				itemType = jobj.TypeInteger
+			case reflect.Float32, reflect.Float64:
+				itemType = jobj.TypeNumber
+			default:
+				slog.Warn("Unsupported array element type", "field", field.Name, "elemType", elemType.Kind())
+				return nil
+			}
+			jobjField = jobj.ArrayOf(fieldName, itemType)
 		}
 	default:
 		slog.Warn("Unsupported field type", "field", field.Name, "type", field.Type.Kind())

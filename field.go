@@ -20,6 +20,7 @@ type Field struct {
 	ValueAnyOf           []ConstDescription
 	SubFields            []*Field
 	AdditionalProperties bool // Default false for all, explicitly false for array
+	ArrayItemType        DataType // For arrays of primitives (when SubFields is nil/empty)
 }
 
 type ConstDescription struct {
@@ -104,6 +105,20 @@ func Array(name string, fields []*Field) *Field {
 		ValueName:            name,
 		ValueAnyOf:           nil,
 		SubFields:            fields,
+		AdditionalProperties: false,
+	}
+	return vb
+}
+
+// ArrayOf creates an array field with primitive item types (e.g., []string, []int)
+func ArrayOf(name string, itemType DataType) *Field {
+	vb := &Field{
+		ValueRequired:        false,
+		ValueType:            TypeArray,
+		ValueName:            name,
+		ValueAnyOf:           nil,
+		SubFields:            nil,
+		ArrayItemType:        itemType,
 		AdditionalProperties: false,
 	}
 	return vb

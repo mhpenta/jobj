@@ -275,3 +275,332 @@ func TestJSONTagNames(t *testing.T) {
 	assert.NotContains(t, required, "cik", "cik should not be required")
 	assert.NotContains(t, required, "accession_number", "accession_number should not be required")
 }
+
+// TestNewSchemasFromFunc tests the NewSchemasFromFunc function that returns both input and output schemas
+func TestNewSchemasFromFunc(t *testing.T) {
+	type UserInput struct {
+		UserID   int    `json:"user_id" desc:"User identifier" required:"true"`
+		Username string `json:"username" desc:"Username to search for" required:"true"`
+		Email    string `json:"email" desc:"Email address"`
+	}
+
+	type UserOutput struct {
+		Success bool   `json:"success" desc:"Whether operation succeeded" required:"true"`
+		Message string `json:"message" desc:"Status message"`
+		UserID  int    `json:"user_id" desc:"User identifier"`
+	}
+
+	handler := func(ctx context.Context, input UserInput) (UserOutput, error) {
+		return UserOutput{
+			Success: true,
+			Message: fmt.Sprintf("Processed user %s", input.Username),
+			UserID:  input.UserID,
+		}, nil
+	}
+
+	inputSchema, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	// Verify input schema
+	assert.Equal(t, "UserInput", inputSchema.Name)
+	assert.Equal(t, "Input schema for UserInput function parameters", inputSchema.Description)
+	assert.Len(t, inputSchema.Fields, 3)
+
+	// Verify input fields
+	inputMap := GetPropertiesMap(inputSchema)
+	inputProps := inputMap["properties"].(map[string]interface{})
+
+	userIDField := inputProps["user_id"].(map[string]string)
+	assert.Equal(t, "integer", userIDField["type"])
+	assert.Equal(t, "User identifier", userIDField["description"])
+
+	usernameField := inputProps["username"].(map[string]string)
+	assert.Equal(t, "string", usernameField["type"])
+	assert.Equal(t, "Username to search for", usernameField["description"])
+
+	emailField := inputProps["email"].(map[string]string)
+	assert.Equal(t, "string", emailField["type"])
+	assert.Equal(t, "Email address", emailField["description"])
+
+	// Verify input required fields
+	inputRequired := inputMap["required"].([]string)
+	assert.Contains(t, inputRequired, "user_id")
+	assert.Contains(t, inputRequired, "username")
+	assert.NotContains(t, inputRequired, "email")
+
+	// Verify output schema
+	assert.Equal(t, "UserOutput", outputSchema.Name)
+	assert.Equal(t, "Output schema for UserOutput function return value", outputSchema.Description)
+	assert.Len(t, outputSchema.Fields, 3)
+
+	// Verify output fields
+	outputMap := GetPropertiesMap(outputSchema)
+	outputProps := outputMap["properties"].(map[string]interface{})
+
+	successField := outputProps["success"].(map[string]string)
+	assert.Equal(t, "boolean", successField["type"])
+	assert.Equal(t, "Whether operation succeeded", successField["description"])
+
+	messageField := outputProps["message"].(map[string]string)
+	assert.Equal(t, "string", messageField["type"])
+	assert.Equal(t, "Status message", messageField["description"])
+
+	outputUserIDField := outputProps["user_id"].(map[string]string)
+	assert.Equal(t, "integer", outputUserIDField["type"])
+	assert.Equal(t, "User identifier", outputUserIDField["description"])
+
+	// Verify output required fields
+	outputRequired := outputMap["required"].([]string)
+	assert.Contains(t, outputRequired, "success")
+	assert.NotContains(t, outputRequired, "message")
+	assert.NotContains(t, outputRequired, "user_id")
+}
+
+// TestNewSchemasFromFunc_InvalidInputType tests error handling when input type is not a struct
+func TestNewSchemasFromFunc_InvalidInputType(t *testing.T) {
+	type ValidOutput struct {
+		Result string `json:"result"`
+	}
+
+	// Handler with non-struct input (string)
+	handler := func(ctx context.Context, input string) (ValidOutput, error) {
+		return ValidOutput{Result: input}, nil
+	}
+
+	_, _, err := NewSchemasFromFunc(handler)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "input parameter type must be a struct")
+}
+
+// TestNewSchemasFromFunc_InvalidOutputType tests error handling when output type is not a struct
+func TestNewSchemasFromFunc_InvalidOutputType(t *testing.T) {
+	type ValidInput struct {
+		Query string `json:"query"`
+	}
+
+	// Handler with non-struct output (string)
+	handler := func(ctx context.Context, input ValidInput) (string, error) {
+		return "result", nil
+	}
+
+	_, _, err := NewSchemasFromFunc(handler)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "output return type must be a struct")
+}
+
+// TestNewSchemasFromFunc_NoValidFields tests error handling when structs have no valid fields
+func TestNewSchemasFromFunc_NoValidFields(t *testing.T) {
+	type EmptyInput struct {
+		privateField string // unexported field
+	}
+
+	type EmptyOutput struct {
+		privateResult int // unexported field
+	}
+
+	handler := func(ctx context.Context, input EmptyInput) (EmptyOutput, error) {
+		return EmptyOutput{}, nil
+	}
+
+	_, _, err := NewSchemasFromFunc(handler)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no valid fields found")
+}
+
+// TestArrayOfPrimitives tests the ArrayOf function and primitive array schema generation
+func TestArrayOfPrimitives(t *testing.T) {
+	type ArrayTestParams struct {
+		Tags        []string  `json:"tags" desc:"List of tags" required:"true"`
+		IDs         []int     `json:"ids" desc:"List of IDs"`
+		Scores      []float64 `json:"scores" desc:"List of scores"`
+		Flags       []bool    `json:"flags" desc:"List of boolean flags"`
+		Description string    `json:"description" desc:"Description text"`
+	}
+
+	handler := func(ctx context.Context, params ArrayTestParams) (string, error) {
+		return "processed", nil
+	}
+
+	schema, err := SafeSchemaFromFunc(handler)
+	assert.NoError(t, err)
+	assert.NotNil(t, schema)
+
+	properties, ok := schema["properties"].(map[string]interface{})
+	assert.True(t, ok, "properties should be a map")
+
+	// Test string array field
+	tagsField, ok := properties["tags"].(map[string]interface{})
+	assert.True(t, ok, "tags should be a map")
+	assert.Equal(t, "array", fmt.Sprint(tagsField["type"]))
+	assert.Equal(t, "List of tags", tagsField["description"])
+	tagsItems, ok := tagsField["items"].(map[string]interface{})
+	assert.True(t, ok, "tags items should be a map")
+	assert.Equal(t, "string", fmt.Sprint(tagsItems["type"]))
+
+	// Test integer array field
+	idsField, ok := properties["ids"].(map[string]interface{})
+	assert.True(t, ok, "ids should be a map")
+	assert.Equal(t, "array", fmt.Sprint(idsField["type"]))
+	assert.Equal(t, "List of IDs", idsField["description"])
+	idsItems, ok := idsField["items"].(map[string]interface{})
+	assert.True(t, ok, "ids items should be a map")
+	assert.Equal(t, "integer", fmt.Sprint(idsItems["type"]))
+
+	// Test float array field
+	scoresField, ok := properties["scores"].(map[string]interface{})
+	assert.True(t, ok, "scores should be a map")
+	assert.Equal(t, "array", fmt.Sprint(scoresField["type"]))
+	assert.Equal(t, "List of scores", scoresField["description"])
+	scoresItems, ok := scoresField["items"].(map[string]interface{})
+	assert.True(t, ok, "scores items should be a map")
+	assert.Equal(t, "number", fmt.Sprint(scoresItems["type"]))
+
+	// Test boolean array field
+	flagsField, ok := properties["flags"].(map[string]interface{})
+	assert.True(t, ok, "flags should be a map")
+	assert.Equal(t, "array", fmt.Sprint(flagsField["type"]))
+	assert.Equal(t, "List of boolean flags", flagsField["description"])
+	flagsItems, ok := flagsField["items"].(map[string]interface{})
+	assert.True(t, ok, "flags items should be a map")
+	assert.Equal(t, "boolean", fmt.Sprint(flagsItems["type"]))
+
+	// Verify required fields
+	required, ok := schema["required"].([]string)
+	assert.True(t, ok)
+	assert.Contains(t, required, "tags", "tags should be required")
+	assert.NotContains(t, required, "ids", "ids should not be required")
+}
+
+// TestArrayOfPrimitivesWithNewSchemaFromFunc tests primitive arrays work with NewSchemaFromFunc
+func TestArrayOfPrimitivesWithNewSchemaFromFunc(t *testing.T) {
+	type FilterParams struct {
+		Keywords []string `json:"keywords" desc:"Search keywords" required:"true"`
+		Years    []int    `json:"years" desc:"Filter by years"`
+	}
+
+	handler := func(ctx context.Context, params FilterParams) (string, error) {
+		return fmt.Sprintf("Filtering with %d keywords", len(params.Keywords)), nil
+	}
+
+	schema, err := NewSchemaFromFunc(handler)
+	assert.NoError(t, err)
+
+	paramsMap := GetPropertiesMap(schema)
+	properties := paramsMap["properties"].(map[string]interface{})
+
+	// Verify keywords array
+	keywordsField, ok := properties["keywords"].(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, "array", fmt.Sprint(keywordsField["type"]))
+	keywordsItems := keywordsField["items"].(map[string]interface{})
+	assert.Equal(t, "string", fmt.Sprint(keywordsItems["type"]))
+
+	// Verify years array
+	yearsField, ok := properties["years"].(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, "array", fmt.Sprint(yearsField["type"]))
+	yearsItems := yearsField["items"].(map[string]interface{})
+	assert.Equal(t, "integer", fmt.Sprint(yearsItems["type"]))
+}
+
+// TestArrayOfPrimitivesWithNewSchemasFromFunc tests primitive arrays with input/output schemas
+func TestArrayOfPrimitivesWithNewSchemasFromFunc(t *testing.T) {
+	type BatchInput struct {
+		Operations []string `json:"operations" desc:"List of operations to perform" required:"true"`
+		Targets    []int    `json:"targets" desc:"Target IDs"`
+	}
+
+	type BatchOutput struct {
+		Completed  []bool   `json:"completed" desc:"Completion status for each operation" required:"true"`
+		Errors     []string `json:"errors" desc:"Error messages if any"`
+		Percentages []float64 `json:"percentages" desc:"Success percentages"`
+	}
+
+	handler := func(ctx context.Context, input BatchInput) (BatchOutput, error) {
+		return BatchOutput{
+			Completed: []bool{true, true, false},
+			Errors:    []string{},
+			Percentages: []float64{100.0, 100.0, 0.0},
+		}, nil
+	}
+
+	inputSchema, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	// Test input schema
+	inputMap := GetPropertiesMap(inputSchema)
+	inputProps := inputMap["properties"].(map[string]interface{})
+
+	operationsField := inputProps["operations"].(map[string]interface{})
+	assert.Equal(t, "array", fmt.Sprint(operationsField["type"]))
+	operationsItems := operationsField["items"].(map[string]interface{})
+	assert.Equal(t, "string", fmt.Sprint(operationsItems["type"]))
+
+	targetsField := inputProps["targets"].(map[string]interface{})
+	assert.Equal(t, "array", fmt.Sprint(targetsField["type"]))
+	targetsItems := targetsField["items"].(map[string]interface{})
+	assert.Equal(t, "integer", fmt.Sprint(targetsItems["type"]))
+
+	// Test output schema
+	outputMap := GetPropertiesMap(outputSchema)
+	outputProps := outputMap["properties"].(map[string]interface{})
+
+	completedField := outputProps["completed"].(map[string]interface{})
+	assert.Equal(t, "array", fmt.Sprint(completedField["type"]))
+	completedItems := completedField["items"].(map[string]interface{})
+	assert.Equal(t, "boolean", fmt.Sprint(completedItems["type"]))
+
+	errorsField := outputProps["errors"].(map[string]interface{})
+	assert.Equal(t, "array", fmt.Sprint(errorsField["type"]))
+	errorsItems := errorsField["items"].(map[string]interface{})
+	assert.Equal(t, "string", fmt.Sprint(errorsItems["type"]))
+
+	percentagesField := outputProps["percentages"].(map[string]interface{})
+	assert.Equal(t, "array", fmt.Sprint(percentagesField["type"]))
+	percentagesItems := percentagesField["items"].(map[string]interface{})
+	assert.Equal(t, "number", fmt.Sprint(percentagesItems["type"]))
+}
+
+// TestMixedArrayTypes tests structs with both primitive arrays and object arrays
+func TestMixedArrayTypes(t *testing.T) {
+	type SubItem struct {
+		Name  string `json:"name" desc:"Item name"`
+		Value int    `json:"value" desc:"Item value"`
+	}
+
+	type MixedParams struct {
+		Tags   []string  `json:"tags" desc:"Simple string tags"`
+		Items  []SubItem `json:"items" desc:"Complex item objects"`
+		Scores []float64 `json:"scores" desc:"Numeric scores"`
+	}
+
+	handler := func(ctx context.Context, params MixedParams) (string, error) {
+		return "processed", nil
+	}
+
+	schema, err := SafeSchemaFromFunc(handler)
+	assert.NoError(t, err)
+
+	properties := schema["properties"].(map[string]interface{})
+
+	// Test primitive array (tags)
+	tagsField := properties["tags"].(map[string]interface{})
+	assert.Equal(t, "array", fmt.Sprint(tagsField["type"]))
+	tagsItems := tagsField["items"].(map[string]interface{})
+	assert.Equal(t, "string", fmt.Sprint(tagsItems["type"]))
+
+	// Test object array (items)
+	itemsField := properties["items"].(map[string]interface{})
+	assert.Equal(t, "array", fmt.Sprint(itemsField["type"]))
+	itemsItems := itemsField["items"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(itemsItems["type"]))
+	itemsProps := itemsItems["properties"].(map[string]interface{})
+	assert.Contains(t, itemsProps, "name")
+	assert.Contains(t, itemsProps, "value")
+
+	// Test primitive array (scores)
+	scoresField := properties["scores"].(map[string]interface{})
+	assert.Equal(t, "array", fmt.Sprint(scoresField["type"]))
+	scoresItems := scoresField["items"].(map[string]interface{})
+	assert.Equal(t, "number", fmt.Sprint(scoresItems["type"]))
+}

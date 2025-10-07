@@ -372,20 +372,30 @@ func TestNewSchemasFromFunc_InvalidInputType(t *testing.T) {
 	assert.Contains(t, err.Error(), "input parameter type must be a struct")
 }
 
-// TestNewSchemasFromFunc_InvalidOutputType tests error handling when output type is not a struct
-func TestNewSchemasFromFunc_InvalidOutputType(t *testing.T) {
+// TestNewSchemasFromFunc_NonStructOutputType tests that non-struct output types are now supported
+func TestNewSchemasFromFunc_NonStructOutputType(t *testing.T) {
 	type ValidInput struct {
 		Query string `json:"query"`
 	}
 
-	// Handler with non-struct output (string)
+	// Handler with non-struct output (string) - this should now work!
 	handler := func(ctx context.Context, input ValidInput) (string, error) {
 		return "result", nil
 	}
 
-	_, _, err := NewSchemasFromFunc(handler)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "output return type must be a struct")
+	inputSchema, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	// Verify input schema
+	assert.Equal(t, "ValidInput", inputSchema.Name)
+	assert.Len(t, inputSchema.Fields, 1)
+
+	// Verify output schema uses RootField for primitive type
+	assert.NotNil(t, outputSchema.RootField)
+	assert.Nil(t, outputSchema.Fields)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "string", outputMap["type"])
 }
 
 // TestNewSchemasFromFunc_NoValidFields tests error handling when structs have no valid fields
@@ -1118,4 +1128,246 @@ func TestMixedArrayTypes(t *testing.T) {
 	assert.Equal(t, "array", fmt.Sprint(scoresField["type"]))
 	scoresItems := scoresField["items"].(map[string]interface{})
 	assert.Equal(t, "number", fmt.Sprint(scoresItems["type"]))
+}
+
+// TestNonStructReturnTypes tests functions that return non-struct types
+// This tests the new RootField functionality
+
+// TestReturnStringArray tests returning []string
+func TestReturnStringArray(t *testing.T) {
+	type SearchParams struct {
+		Query string `json:"query" desc:"Search query" required:"true"`
+	}
+
+	handler := func(ctx context.Context, params SearchParams) ([]string, error) {
+		return []string{"result1", "result2"}, nil
+	}
+
+	inputSchema, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	// Verify input schema works as before
+	assert.Equal(t, "SearchParams", inputSchema.Name)
+	assert.Len(t, inputSchema.Fields, 1)
+
+	// Verify output schema uses RootField
+	assert.Nil(t, outputSchema.Fields)
+	assert.NotNil(t, outputSchema.RootField)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "array", outputMap["type"])
+	items := outputMap["items"].(map[string]interface{})
+	assert.Equal(t, "string", items["type"])
+}
+
+// TestReturnIntArray tests returning []int
+func TestReturnIntArray(t *testing.T) {
+	type Params struct {
+		Count int `json:"count" desc:"Count" required:"true"`
+	}
+
+	handler := func(ctx context.Context, params Params) ([]int, error) {
+		return []int{1, 2, 3}, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "array", outputMap["type"])
+	items := outputMap["items"].(map[string]interface{})
+	assert.Equal(t, "integer", items["type"])
+}
+
+// TestReturnStructArray tests returning []Company
+func TestReturnStructArray(t *testing.T) {
+	type Company struct {
+		Name string `json:"name" desc:"Company name"`
+		CIK  string `json:"cik" desc:"Company CIK"`
+	}
+
+	type SearchParams struct {
+		Query string `json:"query" desc:"Search query"`
+	}
+
+	handler := func(ctx context.Context, params SearchParams) ([]Company, error) {
+		return []Company{
+			{Name: "Test Co", CIK: "0001234567"},
+		}, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	assert.NotNil(t, outputSchema.RootField)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "array", outputMap["type"])
+	items := outputMap["items"].(map[string]interface{})
+	assert.Equal(t, "object", items["type"])
+
+	itemProps := items["properties"].(map[string]interface{})
+	assert.Contains(t, itemProps, "name")
+	assert.Contains(t, itemProps, "cik")
+
+	nameField := itemProps["name"].(map[string]interface{})
+	assert.Equal(t, "string", nameField["type"])
+	assert.Equal(t, "Company name", nameField["description"])
+}
+
+// TestReturnMapStringInt tests returning map[string]int
+func TestReturnMapStringInt(t *testing.T) {
+	type Params struct {
+		ID int `json:"id" desc:"ID"`
+	}
+
+	handler := func(ctx context.Context, params Params) (map[string]int, error) {
+		return map[string]int{"count": 42, "total": 100}, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	assert.NotNil(t, outputSchema.RootField)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "object", outputMap["type"])
+
+	additionalProps := outputMap["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "integer", additionalProps["type"])
+}
+
+// TestReturnMapStringStruct tests returning map[string]Company
+func TestReturnMapStringStruct(t *testing.T) {
+	type Company struct {
+		Name string `json:"name" desc:"Company name"`
+		CIK  string `json:"cik" desc:"Company CIK"`
+	}
+
+	type Params struct {
+		ID int `json:"id" desc:"ID"`
+	}
+
+	handler := func(ctx context.Context, params Params) (map[string]Company, error) {
+		return map[string]Company{
+			"company1": {Name: "Test Co", CIK: "0001234567"},
+		}, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	assert.NotNil(t, outputSchema.RootField)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "object", outputMap["type"])
+
+	additionalProps := outputMap["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "object", additionalProps["type"])
+
+	propsMap := additionalProps["properties"].(map[string]interface{})
+	assert.Contains(t, propsMap, "name")
+	assert.Contains(t, propsMap, "cik")
+}
+
+// TestReturnString tests returning string
+func TestReturnString(t *testing.T) {
+	type Params struct {
+		Input string `json:"input" desc:"Input string"`
+	}
+
+	handler := func(ctx context.Context, params Params) (string, error) {
+		return "result", nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	assert.NotNil(t, outputSchema.RootField)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "string", outputMap["type"])
+}
+
+// TestReturnInt tests returning int
+func TestReturnInt(t *testing.T) {
+	type Params struct {
+		Input int `json:"input" desc:"Input number"`
+	}
+
+	handler := func(ctx context.Context, params Params) (int, error) {
+		return 42, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	assert.NotNil(t, outputSchema.RootField)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "integer", outputMap["type"])
+}
+
+// TestReturnBool tests returning bool
+func TestReturnBool(t *testing.T) {
+	type Params struct {
+		Check bool `json:"check" desc:"Check flag"`
+	}
+
+	handler := func(ctx context.Context, params Params) (bool, error) {
+		return true, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	assert.NotNil(t, outputSchema.RootField)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "boolean", outputMap["type"])
+}
+
+// TestReturnFloat tests returning float64
+func TestReturnFloat(t *testing.T) {
+	type Params struct {
+		Value float64 `json:"value" desc:"Input value"`
+	}
+
+	handler := func(ctx context.Context, params Params) (float64, error) {
+		return 3.14, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	assert.NotNil(t, outputSchema.RootField)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	assert.Equal(t, "number", outputMap["type"])
+}
+
+// TestSafeSchemasFromFuncWithNonStructReturn tests SafeSchemasFromFunc with non-struct return
+func TestSafeSchemasFromFuncWithNonStructReturn(t *testing.T) {
+	type SearchParams struct {
+		Query string `json:"query" desc:"Search query"`
+	}
+
+	handler := func(ctx context.Context, params SearchParams) ([]string, error) {
+		return []string{"result1", "result2"}, nil
+	}
+
+	inputMap, outputMap, err := SafeSchemasFromFunc(handler)
+	assert.NoError(t, err)
+	assert.NotNil(t, inputMap)
+	assert.NotNil(t, outputMap)
+
+	// Check input
+	assert.Equal(t, "object", inputMap["type"])
+	inputProps := inputMap["properties"].(map[string]interface{})
+	assert.Contains(t, inputProps, "query")
+
+	// Check output - should be array
+	assert.Equal(t, "array", outputMap["type"])
+	items := outputMap["items"].(map[string]interface{})
+	assert.Equal(t, "string", items["type"])
 }

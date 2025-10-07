@@ -19,6 +19,7 @@ type Schema struct {
 	Name        string
 	Description string
 	Fields      []*Field
+	RootField   *Field // For non-struct return types (arrays, maps, primitives)
 }
 
 func (r *Schema) GetDescription() string {

@@ -126,34 +126,54 @@ func NewSchemasFromFunc[T any, R any](function func(context.Context, T) (R, erro
 		outputType = outputType.Elem()
 	}
 
-	if outputType.Kind() != reflect.Struct {
-		return jobj.Schema{}, jobj.Schema{}, fmt.Errorf("output return type must be a struct")
-	}
-
-	output = jobj.Schema{
-		Name:        outputType.Name(),
-		Description: fmt.Sprintf("Output schema for %s function return value", outputType.Name()),
-		Fields:      make([]*jobj.Field, 0),
-	}
-
-	for i := 0; i < outputType.NumField(); i++ {
-		field := outputType.Field(i)
-
-		if !field.IsExported() {
-			continue
+	// Handle different return types
+	if outputType.Kind() == reflect.Struct {
+		// Struct return type - use Fields (existing behavior)
+		output = jobj.Schema{
+			Name:        outputType.Name(),
+			Description: fmt.Sprintf("Output schema for %s function return value", outputType.Name()),
+			Fields:      make([]*jobj.Field, 0),
 		}
 
-		jobjField := createFieldFromStructField(field)
-		if jobjField != nil {
-			output.Fields = append(output.Fields, jobjField)
-		}
-	}
+		for i := 0; i < outputType.NumField(); i++ {
+			field := outputType.Field(i)
 
-	if len(output.Fields) == 0 {
-		return jobj.Schema{}, jobj.Schema{}, fmt.Errorf(
-			"no valid fields found in output struct %s. Ensure fields are exported and of supported types",
-			outputType.Name(),
-		)
+			if !field.IsExported() {
+				continue
+			}
+
+			jobjField := createFieldFromStructField(field)
+			if jobjField != nil {
+				output.Fields = append(output.Fields, jobjField)
+			}
+		}
+
+		if len(output.Fields) == 0 {
+			return jobj.Schema{}, jobj.Schema{}, fmt.Errorf(
+				"no valid fields found in output struct %s. Ensure fields are exported and of supported types",
+				outputType.Name(),
+			)
+		}
+	} else {
+		// Non-struct return type - use RootField (new behavior)
+		rootField := createFieldFromType(outputType, "result")
+		if rootField == nil {
+			return jobj.Schema{}, jobj.Schema{}, fmt.Errorf(
+				"unsupported return type %v", outputType,
+			)
+		}
+
+		typeName := outputType.Name()
+		if typeName == "" {
+			// For unnamed types like []string or map[string]int
+			typeName = outputType.String()
+		}
+
+		output = jobj.Schema{
+			Name:        typeName,
+			Description: fmt.Sprintf("Output schema for %s function return value", typeName),
+			RootField:   rootField,
+		}
 	}
 
 	return input, output, nil
@@ -222,6 +242,102 @@ func NewSchemaFromFunc(function interface{}) (jobj.Schema, error) {
 }
 
 // createFieldFromStructField converts a reflect.StructField to a Field
+// createFieldFromType creates a Field from a reflect.Type (for non-struct return types)
+// This is used when the return type is an array, map, or primitive rather than a struct
+func createFieldFromType(typ reflect.Type, name string) *jobj.Field {
+	var jobjField *jobj.Field
+
+	switch typ.Kind() {
+	case reflect.String:
+		jobjField = jobj.Text(name)
+	case reflect.Bool:
+		jobjField = jobj.Bool(name)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		jobjField = jobj.Int(name)
+	case reflect.Float32, reflect.Float64:
+		jobjField = jobj.Float(name)
+	case reflect.Slice, reflect.Array:
+		elemType := typ.Elem()
+		if elemType.Kind() == reflect.Struct {
+			// Array of structs
+			subFields := make([]*jobj.Field, 0)
+			for i := 0; i < elemType.NumField(); i++ {
+				subField := createFieldFromStructField(elemType.Field(i))
+				if subField != nil {
+					subFields = append(subFields, subField)
+				}
+			}
+			jobjField = jobj.Array(name, subFields)
+		} else {
+			// Array of primitives
+			var itemType jobj.DataType
+			switch elemType.Kind() {
+			case reflect.String:
+				itemType = jobj.TypeString
+			case reflect.Bool:
+				itemType = jobj.TypeBoolean
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				itemType = jobj.TypeInteger
+			case reflect.Float32, reflect.Float64:
+				itemType = jobj.TypeNumber
+			default:
+				slog.Warn("Unsupported array element type", "type", typ, "elemType", elemType.Kind())
+				return nil
+			}
+			jobjField = jobj.ArrayOf(name, itemType)
+		}
+	case reflect.Map:
+		// Handle map types - maps become objects with additionalProperties
+		valueType := typ.Elem()
+
+		// Create an object field with additionalProperties set
+		jobjField = &jobj.Field{
+			ValueName:            name,
+			ValueType:            jobj.TypeObject,
+			AdditionalProperties: true,
+		}
+
+		// Determine the value type for additionalProperties
+		switch valueType.Kind() {
+		case reflect.String:
+			jobjField.AdditionalPropertiesType = jobj.TypeString
+		case reflect.Bool:
+			jobjField.AdditionalPropertiesType = jobj.TypeBoolean
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			jobjField.AdditionalPropertiesType = jobj.TypeInteger
+		case reflect.Float32, reflect.Float64:
+			jobjField.AdditionalPropertiesType = jobj.TypeNumber
+		case reflect.Struct:
+			// Map with struct values
+			subFields := make([]*jobj.Field, 0)
+			for i := 0; i < valueType.NumField(); i++ {
+				subField := createFieldFromStructField(valueType.Field(i))
+				if subField != nil {
+					subFields = append(subFields, subField)
+				}
+			}
+			jobjField.AdditionalPropertiesField = &jobj.Field{
+				ValueType: jobj.TypeObject,
+				SubFields: subFields,
+			}
+		case reflect.Interface:
+			// Map with interface{} values
+			jobjField.AdditionalPropertiesField = &jobj.Field{
+				ValueType: jobj.TypeObject,
+				SubFields: nil,
+			}
+		default:
+			slog.Warn("Unsupported map value type", "type", typ, "valueType", valueType.Kind())
+			return nil
+		}
+	default:
+		slog.Warn("Unsupported return type", "type", typ, "kind", typ.Kind())
+		return nil
+	}
+
+	return jobjField
+}
+
 func createFieldFromStructField(field reflect.StructField) *jobj.Field {
 	var jobjField *jobj.Field
 

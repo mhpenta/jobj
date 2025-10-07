@@ -241,6 +241,36 @@ func createFieldFromStructField(field reflect.StructField) *jobj.Field {
 	}
 
 	switch field.Type.Kind() {
+	case reflect.Ptr:
+		// Handle pointer fields by unwrapping and processing the underlying type
+		elemType := field.Type.Elem()
+		switch elemType.Kind() {
+		case reflect.String:
+			jobjField = jobj.Text(fieldName)
+		case reflect.Bool:
+			jobjField = jobj.Bool(fieldName)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			jobjField = jobj.Int(fieldName)
+		case reflect.Float32, reflect.Float64:
+			jobjField = jobj.Float(fieldName)
+		case reflect.Struct:
+			if elemType.String() == "time.Time" {
+				jobjField = jobj.Date(fieldName)
+			} else {
+				subFields := make([]*jobj.Field, 0)
+				for i := 0; i < elemType.NumField(); i++ {
+					subField := createFieldFromStructField(elemType.Field(i))
+					if subField != nil {
+						subFields = append(subFields, subField)
+					}
+				}
+				jobjField = jobj.Object(fieldName, subFields)
+			}
+		default:
+			slog.Warn("Unsupported pointer element type", "field", field.Name, "elemType", elemType.Kind())
+			return nil
+		}
+		// Pointer fields are inherently optional, so we don't mark them as required by default
 	case reflect.String:
 		jobjField = jobj.Text(fieldName)
 	case reflect.Bool:

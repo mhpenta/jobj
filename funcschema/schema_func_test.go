@@ -407,6 +407,203 @@ func TestNewSchemasFromFunc_NoValidFields(t *testing.T) {
 	assert.Contains(t, err.Error(), "no valid fields found")
 }
 
+// TestPointerFields tests that pointer fields are properly handled in schema generation
+func TestPointerFields(t *testing.T) {
+	type CompactSearchResponse struct {
+		CompanyName string `json:"company_name" desc:"Company name"`
+		CIK         string `json:"cik" desc:"Company CIK"`
+	}
+
+	type FullSearchResponse struct {
+		CompanyName string `json:"company_name" desc:"Company name"`
+		CIK         string `json:"cik" desc:"Company CIK"`
+		Address     string `json:"address" desc:"Company address"`
+		Industry    string `json:"industry" desc:"Industry"`
+	}
+
+	type AllCompanySearchResponse struct {
+		CompactSearchResponse *CompactSearchResponse `json:"compact_search_response,omitempty" desc:"Compact search result"`
+		FullSearchResponse    *FullSearchResponse    `json:"full_search_response,omitempty" desc:"Full search result"`
+	}
+
+	handler := func(ctx context.Context, input SearchToolParams) (AllCompanySearchResponse, error) {
+		return AllCompanySearchResponse{
+			CompactSearchResponse: &CompactSearchResponse{
+				CompanyName: "Test Company",
+				CIK:         "0001234567",
+			},
+		}, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	// Verify output schema has the pointer fields
+	assert.Equal(t, "AllCompanySearchResponse", outputSchema.Name)
+	assert.Len(t, outputSchema.Fields, 2)
+
+	// Verify fields are present
+	outputMap := GetPropertiesMap(outputSchema)
+	outputProps := outputMap["properties"].(map[string]interface{})
+
+	// Check compact_search_response field
+	compactField, hasCompact := outputProps["compact_search_response"]
+	assert.True(t, hasCompact, "should have compact_search_response field")
+	compactFieldMap := compactField.(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(compactFieldMap["type"]))
+	assert.Equal(t, "Compact search result", compactFieldMap["description"])
+
+	// Check nested properties of CompactSearchResponse
+	compactProps := compactFieldMap["properties"].(map[string]interface{})
+	assert.Contains(t, compactProps, "company_name")
+	assert.Contains(t, compactProps, "cik")
+
+	// Check full_search_response field
+	fullField, hasFull := outputProps["full_search_response"]
+	assert.True(t, hasFull, "should have full_search_response field")
+	fullFieldMap := fullField.(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(fullFieldMap["type"]))
+	assert.Equal(t, "Full search result", fullFieldMap["description"])
+
+	// Check nested properties of FullSearchResponse
+	fullProps := fullFieldMap["properties"].(map[string]interface{})
+	assert.Contains(t, fullProps, "company_name")
+	assert.Contains(t, fullProps, "cik")
+	assert.Contains(t, fullProps, "address")
+	assert.Contains(t, fullProps, "industry")
+
+	// Verify pointer fields are NOT required (they're optional by default)
+	requiredFields := outputMap["required"]
+	if requiredFields != nil {
+		required := requiredFields.([]string)
+		assert.NotContains(t, required, "compact_search_response")
+		assert.NotContains(t, required, "full_search_response")
+	}
+}
+
+// TestPointerPrimitives tests pointer fields with primitive types
+func TestPointerPrimitives(t *testing.T) {
+	type OptionalFieldsParams struct {
+		RequiredName string  `json:"required_name" desc:"Required name" required:"true"`
+		OptionalAge  *int    `json:"optional_age,omitempty" desc:"Optional age"`
+		OptionalCity *string `json:"optional_city,omitempty" desc:"Optional city"`
+		OptionalFlag *bool   `json:"optional_flag,omitempty" desc:"Optional flag"`
+	}
+
+	handler := func(ctx context.Context, params OptionalFieldsParams) (string, error) {
+		return "processed", nil
+	}
+
+	schema, err := NewSchemaFromFunc(handler)
+	assert.NoError(t, err)
+
+	paramsMap := GetPropertiesMap(schema)
+	properties := paramsMap["properties"].(map[string]interface{})
+
+	// Check required field
+	requiredField := properties["required_name"].(map[string]string)
+	assert.Equal(t, "string", requiredField["type"])
+
+	// Check optional pointer fields exist
+	ageField := properties["optional_age"].(map[string]string)
+	assert.Equal(t, "integer", ageField["type"])
+	assert.Equal(t, "Optional age", ageField["description"])
+
+	cityField := properties["optional_city"].(map[string]string)
+	assert.Equal(t, "string", cityField["type"])
+	assert.Equal(t, "Optional city", cityField["description"])
+
+	flagField := properties["optional_flag"].(map[string]string)
+	assert.Equal(t, "boolean", flagField["type"])
+	assert.Equal(t, "Optional flag", flagField["description"])
+
+	// Verify required fields
+	required := paramsMap["required"].([]string)
+	assert.Contains(t, required, "required_name")
+	assert.NotContains(t, required, "optional_age")
+	assert.NotContains(t, required, "optional_city")
+	assert.NotContains(t, required, "optional_flag")
+}
+
+// TestPointerFieldsV2 tests pointer fields with NewSchemaFromFuncV2
+func TestPointerFieldsV2(t *testing.T) {
+	type ResponseData struct {
+		Status  string `json:"status" desc:"Operation status"`
+		Message string `json:"message" desc:"Status message"`
+	}
+
+	type OptionalResponse struct {
+		Success bool          `json:"success" desc:"Whether operation succeeded" required:"true"`
+		Data    *ResponseData `json:"data,omitempty" desc:"Response data if available"`
+		Error   *string       `json:"error,omitempty" desc:"Error message if failed"`
+	}
+
+	handler := func(ctx context.Context, input SearchToolParams) (OptionalResponse, error) {
+		return OptionalResponse{Success: true}, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	outputProps := outputMap["properties"].(map[string]interface{})
+
+	// Check success field (required)
+	successField := outputProps["success"].(map[string]string)
+	assert.Equal(t, "boolean", successField["type"])
+
+	// Check data field (pointer to struct)
+	dataField := outputProps["data"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(dataField["type"]))
+	assert.Equal(t, "Response data if available", dataField["description"])
+	dataProps := dataField["properties"].(map[string]interface{})
+	assert.Contains(t, dataProps, "status")
+	assert.Contains(t, dataProps, "message")
+
+	// Check error field (pointer to string)
+	errorField := outputProps["error"].(map[string]string)
+	assert.Equal(t, "string", errorField["type"])
+	assert.Equal(t, "Error message if failed", errorField["description"])
+
+	// Verify only success is required
+	required := outputMap["required"].([]string)
+	assert.Contains(t, required, "success")
+	assert.NotContains(t, required, "data")
+	assert.NotContains(t, required, "error")
+}
+
+// TestMixedPointerAndNonPointer tests structs with both pointer and non-pointer fields
+func TestMixedPointerAndNonPointer(t *testing.T) {
+	type MixedParams struct {
+		ID          int     `json:"id" desc:"Required ID" required:"true"`
+		Name        string  `json:"name" desc:"Required name" required:"true"`
+		Description *string `json:"description,omitempty" desc:"Optional description"`
+		Age         *int    `json:"age,omitempty" desc:"Optional age"`
+	}
+
+	handler := func(ctx context.Context, params MixedParams) (string, error) {
+		return "processed", nil
+	}
+
+	schema, err := SafeSchemaFromFunc(handler)
+	assert.NoError(t, err)
+
+	properties := schema["properties"].(map[string]interface{})
+
+	// Verify all fields exist
+	assert.Contains(t, properties, "id")
+	assert.Contains(t, properties, "name")
+	assert.Contains(t, properties, "description")
+	assert.Contains(t, properties, "age")
+
+	// Verify required fields
+	required := schema["required"].([]string)
+	assert.Contains(t, required, "id")
+	assert.Contains(t, required, "name")
+	assert.NotContains(t, required, "description")
+	assert.NotContains(t, required, "age")
+}
+
 // TestArrayOfPrimitives tests the ArrayOf function and primitive array schema generation
 func TestArrayOfPrimitives(t *testing.T) {
 	type ArrayTestParams struct {

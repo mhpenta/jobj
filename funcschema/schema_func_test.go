@@ -758,6 +758,324 @@ func TestArrayOfPrimitivesWithNewSchemasFromFunc(t *testing.T) {
 	assert.Equal(t, "number", fmt.Sprint(percentagesItems["type"]))
 }
 
+// TestPointerReturnType tests that functions returning pointer structs work correctly
+func TestPointerReturnType(t *testing.T) {
+	type SearchParams struct {
+		Query string `json:"query" desc:"Search query" required:"true"`
+	}
+
+	type SearchResult struct {
+		Found bool   `json:"found" desc:"Whether results were found"`
+		Count int    `json:"count" desc:"Number of results"`
+		Items []string `json:"items" desc:"Result items"`
+	}
+
+	// Function that returns a pointer to struct
+	handler := func(ctx context.Context, params SearchParams) (*SearchResult, error) {
+		return &SearchResult{
+			Found: true,
+			Count: 5,
+			Items: []string{"item1", "item2"},
+		}, nil
+	}
+
+	inputSchema, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	// Verify input schema
+	assert.Equal(t, "SearchParams", inputSchema.Name)
+	assert.Len(t, inputSchema.Fields, 1)
+
+	// Verify output schema - should work with pointer return type
+	assert.Equal(t, "SearchResult", outputSchema.Name)
+	assert.Len(t, outputSchema.Fields, 3)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	outputProps := outputMap["properties"].(map[string]interface{})
+
+	foundField := outputProps["found"].(map[string]string)
+	assert.Equal(t, "boolean", foundField["type"])
+
+	countField := outputProps["count"].(map[string]string)
+	assert.Equal(t, "integer", countField["type"])
+
+	itemsField := outputProps["items"].(map[string]interface{})
+	assert.Equal(t, "array", fmt.Sprint(itemsField["type"]))
+}
+
+// TestMapFields tests map field support
+func TestMapFields(t *testing.T) {
+	type StatsResponse struct {
+		Scores      map[string]int     `json:"scores" desc:"Score by category"`
+		Metadata    map[string]string  `json:"metadata" desc:"Additional metadata"`
+		Flags       map[string]bool    `json:"flags" desc:"Feature flags"`
+		Percentages map[string]float64 `json:"percentages" desc:"Percentage values"`
+	}
+
+	handler := func(ctx context.Context, params SearchToolParams) (StatsResponse, error) {
+		return StatsResponse{
+			Scores: map[string]int{"math": 95, "english": 87},
+		}, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	outputProps := outputMap["properties"].(map[string]interface{})
+
+	// Check scores map (map[string]int)
+	scoresField := outputProps["scores"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(scoresField["type"]))
+	assert.Equal(t, "Score by category", scoresField["description"])
+	scoresAdditional := scoresField["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "integer", scoresAdditional["type"])
+
+	// Check metadata map (map[string]string)
+	metadataField := outputProps["metadata"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(metadataField["type"]))
+	metadataAdditional := metadataField["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "string", metadataAdditional["type"])
+
+	// Check flags map (map[string]bool)
+	flagsField := outputProps["flags"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(flagsField["type"]))
+	flagsAdditional := flagsField["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "boolean", flagsAdditional["type"])
+
+	// Check percentages map (map[string]float64)
+	percentagesField := outputProps["percentages"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(percentagesField["type"]))
+	percentagesAdditional := percentagesField["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "number", percentagesAdditional["type"])
+}
+
+// TestMapWithStructValues tests maps with struct values
+func TestMapWithStructValues(t *testing.T) {
+	type UserInfo struct {
+		Name  string `json:"name" desc:"User name"`
+		Age   int    `json:"age" desc:"User age"`
+		Email string `json:"email" desc:"User email"`
+	}
+
+	type UsersResponse struct {
+		Users map[string]UserInfo `json:"users" desc:"Users by ID"`
+	}
+
+	handler := func(ctx context.Context, params SearchToolParams) (UsersResponse, error) {
+		return UsersResponse{
+			Users: map[string]UserInfo{
+				"user1": {Name: "Alice", Age: 30, Email: "alice@example.com"},
+			},
+		}, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	outputProps := outputMap["properties"].(map[string]interface{})
+
+	// Check users map (map[string]UserInfo)
+	usersField := outputProps["users"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(usersField["type"]))
+	assert.Equal(t, "Users by ID", usersField["description"])
+
+	usersAdditional := usersField["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "object", usersAdditional["type"])
+
+	// Check nested struct properties
+	userProps := usersAdditional["properties"].(map[string]interface{})
+	assert.Contains(t, userProps, "name")
+	assert.Contains(t, userProps, "age")
+	assert.Contains(t, userProps, "email")
+
+	nameField := userProps["name"].(map[string]string)
+	assert.Equal(t, "string", nameField["type"])
+
+	ageField := userProps["age"].(map[string]string)
+	assert.Equal(t, "integer", ageField["type"])
+}
+
+// TestPointerParamsAndPointerReturn tests both pointer params and pointer return
+func TestPointerParamsAndPointerReturn(t *testing.T) {
+	type CompactSearchResponse struct {
+		CompanyName string `json:"company_name" desc:"Company name"`
+		CIK         string `json:"cik" desc:"Company CIK"`
+	}
+
+	type FullSearchResponse struct {
+		CompanyName string `json:"company_name" desc:"Company name"`
+		CIK         string `json:"cik" desc:"Company CIK"`
+		Address     string `json:"address" desc:"Company address"`
+	}
+
+	type AllCompanySearchResponse struct {
+		CompactSearchResponse *CompactSearchResponse `json:"compact_search_response,omitempty" desc:"Compact result"`
+		FullSearchResponse    *FullSearchResponse    `json:"full_search_response,omitempty" desc:"Full result"`
+	}
+
+	type AllCompanySearchToolParams struct {
+		CompanyName string `json:"company_name" desc:"Company name to search"`
+		CompactMode bool   `json:"compact_mode" desc:"Use compact mode"`
+	}
+
+	// This is the real-world signature from the user's issue
+	handler := func(ctx context.Context, params *AllCompanySearchToolParams) (*AllCompanySearchResponse, error) {
+		return &AllCompanySearchResponse{
+			CompactSearchResponse: &CompactSearchResponse{
+				CompanyName: "Test Company",
+				CIK:         "0001234567",
+			},
+		}, nil
+	}
+
+	inputSchema, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	// Verify input schema
+	assert.Equal(t, "AllCompanySearchToolParams", inputSchema.Name)
+	assert.Len(t, inputSchema.Fields, 2)
+
+	// Verify output schema
+	assert.Equal(t, "AllCompanySearchResponse", outputSchema.Name)
+	assert.Len(t, outputSchema.Fields, 2)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	outputProps := outputMap["properties"].(map[string]interface{})
+
+	// Both pointer fields should be present
+	assert.Contains(t, outputProps, "compact_search_response")
+	assert.Contains(t, outputProps, "full_search_response")
+}
+
+// TestNestedMapInStruct tests maps inside nested structs
+func TestNestedMapInStruct(t *testing.T) {
+	type Summary struct {
+		TotalCount      int            `json:"total_count" desc:"Total count"`
+		CategoriesFound map[string]int `json:"categories_found" desc:"Categories found"`
+	}
+
+	type Metadata struct {
+		SearchQuery string `json:"search_query" desc:"Search query"`
+		ExecutedAt  string `json:"executed_at" desc:"Execution time"`
+	}
+
+	type SearchResponse struct {
+		Summary  Summary  `json:"summary" desc:"Search summary"`
+		Metadata Metadata `json:"metadata" desc:"Search metadata"`
+	}
+
+	handler := func(ctx context.Context, params SearchToolParams) (SearchResponse, error) {
+		return SearchResponse{}, nil
+	}
+
+	_, outputSchema, err := NewSchemasFromFunc(handler)
+	assert.NoError(t, err)
+
+	outputMap := GetPropertiesMap(outputSchema)
+	outputProps := outputMap["properties"].(map[string]interface{})
+
+	// Check Summary nested object
+	summaryField := outputProps["summary"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(summaryField["type"]))
+
+	summaryProps := summaryField["properties"].(map[string]interface{})
+
+	// Check CategoriesFound map inside Summary
+	categoriesField := summaryProps["categories_found"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(categoriesField["type"]))
+	categoriesAdditional := categoriesField["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "integer", categoriesAdditional["type"])
+}
+
+// TestSchemasFromFunc_PointerReturnWithMaps tests the exact scenario from the user's question
+func TestSchemasFromFunc_PointerReturnWithMaps(t *testing.T) {
+	// Minimal test struct with map fields
+	type TestResponse struct {
+		Name     string            `json:"name" desc:"Name field"`
+		Tags     map[string]string `json:"tags" desc:"Tags map"`
+		Counts   map[string]int    `json:"counts" desc:"Counts map"`
+		Metadata map[string]interface{} `json:"metadata,omitempty" desc:"Metadata map"`
+		Categories struct {
+			Found map[string]int `json:"found" desc:"Categories found"`
+		} `json:"categories" desc:"Categories"`
+	}
+
+	type TestParams struct {
+		Query string `json:"query" desc:"Search query"`
+	}
+
+	// Function that returns pointer to struct (issue #1) with maps (issue #2)
+	testFunction := func(ctx context.Context, params *TestParams) (*TestResponse, error) {
+		return &TestResponse{
+			Name:   "test",
+			Tags:   map[string]string{"foo": "bar"},
+			Counts: map[string]int{"total": 42},
+		}, nil
+	}
+
+	schemaIn, schemaOut, err := SafeSchemasFromFunc(testFunction)
+
+	if err != nil {
+		t.Fatalf("Failed to generate schema: %v", err)
+	}
+
+	if schemaIn == nil {
+		t.Fatal("Input schema should not be nil")
+	}
+
+	if schemaOut == nil {
+		t.Fatal("Output schema should not be nil")
+	}
+
+	// Verify map fields are present in output schema
+	properties := schemaOut["properties"].(map[string]interface{})
+
+	// Check Name field (regular string)
+	nameSchema := properties["name"].(map[string]string)
+	assert.Equal(t, "string", nameSchema["type"])
+
+	// Check Tags map[string]string
+	tagsSchema := properties["tags"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(tagsSchema["type"]))
+	assert.Equal(t, "Tags map", tagsSchema["description"])
+	tagsAdditional := tagsSchema["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "string", tagsAdditional["type"])
+
+	// Check Counts map[string]int
+	countsSchema := properties["counts"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(countsSchema["type"]))
+	assert.Equal(t, "Counts map", countsSchema["description"])
+	countsAdditional := countsSchema["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "integer", countsAdditional["type"])
+
+	// Check Metadata map[string]interface{} - should allow any value type
+	metadataSchema := properties["metadata"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(metadataSchema["type"]))
+	assert.Equal(t, "Metadata map", metadataSchema["description"])
+	// For interface{} maps, additionalProperties should be true (allows any schema)
+	assert.Equal(t, true, metadataSchema["additionalProperties"])
+
+	// Check Categories nested struct with map inside
+	categoriesSchema := properties["categories"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(categoriesSchema["type"]))
+	categoriesProps := categoriesSchema["properties"].(map[string]interface{})
+
+	// Check Found map[string]int inside Categories
+	foundSchema := categoriesProps["found"].(map[string]interface{})
+	assert.Equal(t, "object", fmt.Sprint(foundSchema["type"]))
+	assert.Equal(t, "Categories found", foundSchema["description"])
+	foundAdditional := foundSchema["additionalProperties"].(map[string]interface{})
+	assert.Equal(t, "integer", foundAdditional["type"])
+
+	// Verify input schema
+	inputProps := schemaIn["properties"].(map[string]interface{})
+	querySchema := inputProps["query"].(map[string]string)
+	assert.Equal(t, "string", querySchema["type"])
+	assert.Equal(t, "Search query", querySchema["description"])
+}
+
 // TestMixedArrayTypes tests structs with both primitive arrays and object arrays
 func TestMixedArrayTypes(t *testing.T) {
 	type SubItem struct {

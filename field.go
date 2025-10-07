@@ -12,15 +12,17 @@ const (
 )
 
 type Field struct {
-	ValueName            string
-	ValueType            DataType
-	ValueDescription     string
-	Value                string
-	ValueRequired        bool
-	ValueAnyOf           []ConstDescription
-	SubFields            []*Field
-	AdditionalProperties bool // Default false for all, explicitly false for array
-	ArrayItemType        DataType // For arrays of primitives (when SubFields is nil/empty)
+	ValueName                 string
+	ValueType                 DataType
+	ValueDescription          string
+	Value                     string
+	ValueRequired             bool
+	ValueAnyOf                []ConstDescription
+	SubFields                 []*Field
+	AdditionalProperties      bool     // Default false for all, explicitly false for array
+	ArrayItemType             DataType // For arrays of primitives (when SubFields is nil/empty)
+	AdditionalPropertiesType  DataType // For maps (when AdditionalProperties is true and this is set)
+	AdditionalPropertiesField *Field   // For maps with complex value types (e.g., map[string]Struct)
 }
 
 type ConstDescription struct {

@@ -81,8 +81,8 @@ func NewSchemaFromFuncV2[T any, R any](function func(context.Context, T) (R, err
 // they have no exported fields of supported types.
 func NewSchemasFromFunc[T any, R any](function func(context.Context, T) (R, error)) (input jobj.Schema, output jobj.Schema, err error) {
 	// Create input schema from T
-	var zeroInput T
-	inputType := reflect.TypeOf(zeroInput)
+	// Use reflect.TypeOf with a typed nil to get the type even for pointer types
+	inputType := reflect.TypeOf((*T)(nil)).Elem()
 
 	if inputType.Kind() == reflect.Ptr {
 		inputType = inputType.Elem()
@@ -119,8 +119,8 @@ func NewSchemasFromFunc[T any, R any](function func(context.Context, T) (R, erro
 	}
 
 	// Create output schema from R
-	var zeroOutput R
-	outputType := reflect.TypeOf(zeroOutput)
+	// Use reflect.TypeOf with a typed nil to get the type even for pointer types
+	outputType := reflect.TypeOf((*R)(nil)).Elem()
 
 	if outputType.Kind() == reflect.Ptr {
 		outputType = outputType.Elem()
@@ -321,6 +321,71 @@ func createFieldFromStructField(field reflect.StructField) *jobj.Field {
 				return nil
 			}
 			jobjField = jobj.ArrayOf(fieldName, itemType)
+		}
+	case reflect.Map:
+		// Handle map types - maps become objects with additionalProperties
+		valueType := field.Type.Elem()
+
+		// Create an object field with additionalProperties set
+		jobjField = &jobj.Field{
+			ValueName:            fieldName,
+			ValueType:            jobj.TypeObject,
+			AdditionalProperties: true,
+		}
+
+		// Determine the value type for additionalProperties
+		switch valueType.Kind() {
+		case reflect.String:
+			jobjField.AdditionalPropertiesType = jobj.TypeString
+		case reflect.Bool:
+			jobjField.AdditionalPropertiesType = jobj.TypeBoolean
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			jobjField.AdditionalPropertiesType = jobj.TypeInteger
+		case reflect.Float32, reflect.Float64:
+			jobjField.AdditionalPropertiesType = jobj.TypeNumber
+		case reflect.Struct:
+			// Map with struct values
+			subFields := make([]*jobj.Field, 0)
+			for i := 0; i < valueType.NumField(); i++ {
+				subField := createFieldFromStructField(valueType.Field(i))
+				if subField != nil {
+					subFields = append(subFields, subField)
+				}
+			}
+			jobjField.AdditionalPropertiesField = &jobj.Field{
+				ValueType: jobj.TypeObject,
+				SubFields: subFields,
+			}
+		case reflect.Ptr:
+			// Map with pointer values - unwrap and process
+			elemType := valueType.Elem()
+			if elemType.Kind() == reflect.Struct {
+				subFields := make([]*jobj.Field, 0)
+				for i := 0; i < elemType.NumField(); i++ {
+					subField := createFieldFromStructField(elemType.Field(i))
+					if subField != nil {
+						subFields = append(subFields, subField)
+					}
+				}
+				jobjField.AdditionalPropertiesField = &jobj.Field{
+					ValueType: jobj.TypeObject,
+					SubFields: subFields,
+				}
+			} else {
+				slog.Warn("Unsupported map pointer value type", "field", field.Name, "valueType", elemType.Kind())
+				return nil
+			}
+		case reflect.Interface:
+			// Map with interface{} values - treat as generic object
+			// This is common for metadata fields: map[string]interface{}
+			// We can't introspect the actual type, so we allow any value type
+			jobjField.AdditionalPropertiesField = &jobj.Field{
+				ValueType: jobj.TypeObject,
+				SubFields: nil, // Empty SubFields means any properties allowed
+			}
+		default:
+			slog.Warn("Unsupported map value type", "field", field.Name, "valueType", valueType.Kind())
+			return nil
 		}
 	default:
 		slog.Warn("Unsupported field type", "field", field.Name, "type", field.Type.Kind())

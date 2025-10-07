@@ -161,6 +161,37 @@ func (r *Schema) FieldsJson() map[string]interface{} {
 		}
 
 		if field.ValueType == "object" {
+			// Handle maps (object with additionalProperties)
+			if field.AdditionalProperties && (field.AdditionalPropertiesType != "" || field.AdditionalPropertiesField != nil) {
+				objectSchema := map[string]interface{}{
+					"type":        field.ValueType,
+					"description": field.ValueDescription,
+				}
+
+				if field.AdditionalPropertiesType != "" {
+					// Map with primitive values
+					objectSchema["additionalProperties"] = map[string]interface{}{
+						"type": string(field.AdditionalPropertiesType),
+					}
+				} else if field.AdditionalPropertiesField != nil {
+					// Map with complex values (struct or interface{})
+					if field.AdditionalPropertiesField.SubFields == nil {
+						// interface{} case - allow any value type (true means any schema)
+						objectSchema["additionalProperties"] = true
+					} else {
+						// Struct case - define the object schema
+						objectSchema["additionalProperties"] = map[string]interface{}{
+							"type":       string(field.AdditionalPropertiesField.ValueType),
+							"properties": processObjectFields(field.AdditionalPropertiesField.SubFields),
+						}
+					}
+				}
+
+				properties[field.ValueName] = objectSchema
+				continue
+			}
+
+			// Regular object with defined properties
 			objectFieldProperties := processObjectFields(field.SubFields)
 			properties[field.ValueName] = map[string]interface{}{
 				"type":        field.ValueType,
@@ -341,11 +372,54 @@ func processObjectFields(fields []*Field) map[string]interface{} {
 					"type": string(field.ArrayItemType),
 				},
 			}
-		} else {
-			objectFieldProperties[field.ValueName] = map[string]string{
+			continue
+		}
+
+		// Handle maps (objects with additionalProperties)
+		if field.ValueType == TypeObject && field.AdditionalProperties && (field.AdditionalPropertiesType != "" || field.AdditionalPropertiesField != nil) {
+			objectSchema := map[string]interface{}{
 				"type":        string(field.ValueType),
 				"description": field.ValueDescription,
 			}
+
+			if field.AdditionalPropertiesType != "" {
+				// Map with primitive values
+				objectSchema["additionalProperties"] = map[string]interface{}{
+					"type": string(field.AdditionalPropertiesType),
+				}
+			} else if field.AdditionalPropertiesField != nil {
+				// Map with complex values (struct or interface{})
+				if field.AdditionalPropertiesField.SubFields == nil {
+					// interface{} case - allow any value type (true means any schema)
+					objectSchema["additionalProperties"] = true
+				} else {
+					// Struct case - define the object schema
+					objectSchema["additionalProperties"] = map[string]interface{}{
+						"type":       string(field.AdditionalPropertiesField.ValueType),
+						"properties": processObjectFields(field.AdditionalPropertiesField.SubFields),
+					}
+				}
+			}
+
+			objectFieldProperties[field.ValueName] = objectSchema
+			continue
+		}
+
+		// Handle regular objects with SubFields
+		if field.ValueType == TypeObject && field.SubFields != nil {
+			objectFieldProperties[field.ValueName] = map[string]interface{}{
+				"type":        string(field.ValueType),
+				"description": field.ValueDescription,
+				"properties":  processObjectFields(field.SubFields),
+				"required":    field.getRequiredFields(),
+			}
+			continue
+		}
+
+		// Default: primitive types
+		objectFieldProperties[field.ValueName] = map[string]string{
+			"type":        string(field.ValueType),
+			"description": field.ValueDescription,
 		}
 	}
 	return objectFieldProperties
